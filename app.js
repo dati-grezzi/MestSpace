@@ -13,7 +13,7 @@ const mondayOf = s => { const d = parseISO(s); const w = d.getDay(); d.setDate(d
 const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 const overlap = (a, b) => toMin(a.dalle) < toMin(b.alle) && toMin(b.dalle) < toMin(a.alle);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const colorOf = s => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 70% 82%)`; };
+const colorOf = s => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 55% 84%)`; };
 
 /* ---------- preferenze di visualizzazione (solo questo dispositivo) ---------- */
 const UI_KEY = 'mestspace-ui';
