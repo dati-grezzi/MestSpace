@@ -7,18 +7,18 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
-<meta name="theme-color" content="#F3F0E7">
+<meta name="theme-color" content="#EDF2E7">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  /* Stile "registro": carta avorio, inchiostro, rosso di margine, penna verde-petrolio (come SOStituto e GEclass) */
+  /* Stile "registro" (come SOStituto e GEclass) in versione verde: carta salvia, inchiostro verde scuro, accenti verdi */
   :root{
-    --paper:#F3F0E7; --paper2:#FBFAF5; --ink:#232B39; --ink-soft:#6A7180;
-    --red:#C0403A; --teal:#1C6E6A; --amber:#B07A1E;
-    --rule:#DED8C6; --rule-soft:#E9E4D6;
-    --tint-teal:#DCEBE7; --tint-red:#F4DAD7; --tint-warm:#EFEBDD;
-    --bd-red:#E3B7B2; --tx-red-dark:#8A2F2A; --bd-ok:#A8D9BC;
+    --paper:#EDF2E7; --paper2:#F8FBF4; --ink:#1F3027; --ink-soft:#66786D;
+    --accent:#4C9A63; --teal:#2E7D4F; --amber:#B07A1E;
+    --rule:#CFDCC8; --rule-soft:#DDE8D6;
+    --tint-teal:#DDEEDC; --tint-red:#F4DAD7; --tint-warm:#E6EEDD;
+    --bd-red:#E3B7B2; --tx-red-dark:#8A2F2A; --bd-ok:#A9D4B5;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0}
@@ -27,7 +27,7 @@
   .brand{display:flex;align-items:center;gap:10px}
   .logo{width:46px;height:46px;flex:0 0 auto}
   header h1{font-family:'Zilla Slab',Georgia,serif;font-weight:700;font-size:30px;letter-spacing:-.01em;line-height:1;margin:0}
-  header h1 .m{color:var(--red)}
+  header h1 .m{color:var(--accent)}
   .sub{font-size:13px;color:var(--ink-soft);margin-top:3px;font-weight:500}
   /* barra inferiore a schede, come in SOStituto */
   nav{position:fixed;bottom:0;left:0;right:0;max-width:760px;margin:0 auto;display:flex;background:var(--paper2);border-top:2px solid var(--ink);z-index:100}
@@ -49,7 +49,7 @@
   table.grid{border-collapse:collapse;width:100%;background:var(--paper2);border:1.5px solid var(--rule)}
   table.grid th,table.grid td{border:1px solid var(--rule-soft);padding:6px;vertical-align:top}
   table.grid thead th{background:var(--ink);color:var(--paper);text-align:left;white-space:nowrap;font-family:'Zilla Slab',Georgia,serif}
-  table.grid tbody th{background:var(--tint-warm);color:var(--ink);text-align:left;white-space:nowrap;border-left:3px solid rgba(192,64,58,.45)}
+  table.grid tbody th{background:var(--tint-warm);color:var(--ink);text-align:left;white-space:nowrap;border-left:3px solid rgba(76,154,99,.55)}
   table.grid td{min-width:120px}
   .ev{border-radius:7px;padding:4px 6px;margin-bottom:4px;font-size:12px;color:var(--ink)}
   .ev.var{outline:1.5px dashed var(--amber);outline-offset:-2px}
@@ -113,13 +113,13 @@
 <header>
   <div class="brand">
     <svg class="logo" viewBox="0 0 48 48" role="img" aria-label="Bussola">
-      <circle cx="24" cy="24" r="20" fill="#FBFAF5" stroke="#232B39" stroke-width="3"/>
-      <path d="M24 7v5M24 36v5M7 24h5M36 24h5" stroke="#232B39" stroke-width="2.2" stroke-linecap="round"/>
+      <circle cx="24" cy="24" r="20" fill="#F8FBF4" stroke="#1F3027" stroke-width="3"/>
+      <path d="M24 7v5M24 36v5M7 24h5M36 24h5" stroke="#1F3027" stroke-width="2.2" stroke-linecap="round"/>
       <g transform="rotate(45 24 24)">
-        <path d="M24 11 L29.5 24 H18.5 Z" fill="#C0403A"/>
-        <path d="M24 37 L29.5 24 H18.5 Z" fill="#1C6E6A"/>
+        <path d="M24 11 L29.5 24 H18.5 Z" fill="#5FAE72"/>
+        <path d="M24 37 L29.5 24 H18.5 Z" fill="#1F5C3A"/>
       </g>
-      <circle cx="24" cy="24" r="2.5" fill="#232B39"/>
+      <circle cx="24" cy="24" r="2.5" fill="#1F3027"/>
     </svg>
     <div>
       <h1><span class="m">Mest</span>Space</h1>
