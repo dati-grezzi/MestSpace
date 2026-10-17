@@ -11,7 +11,9 @@
   *{box-sizing:border-box}
   body{margin:0;font:13px/1.4 Verdana,Tahoma,Arial,sans-serif;color:#003366;background:var(--bg)}
   header{background:linear-gradient(#5b93d6,#003399);color:#fff;padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-bottom:3px solid #001f66}
-  header h1{font-size:22px;font-style:italic;font-weight:bold;margin:0 12px 0 0;letter-spacing:-0.5px;text-shadow:1px 1px 0 #001f66}
+  .brand{margin-right:12px}
+  header h1{font-size:22px;font-style:italic;font-weight:bold;margin:0;letter-spacing:-0.5px;text-shadow:1px 1px 0 #001f66}
+  .sub{font-size:11px;color:#dbe9f7;letter-spacing:.2px;margin-top:1px}
   nav button{background:linear-gradient(#7aa9e0,#2a63b5);color:#fff;border:1px solid #001f66;border-radius:4px;padding:6px 10px;margin-right:4px;cursor:pointer;font-weight:bold}
   nav button.on{background:#fff;color:var(--blue);border-color:#fff}
   main{padding:12px}
@@ -46,9 +48,12 @@
   body.big button,body.big select,body.big input{font-size:16px}
   body.big nav button{font-size:16px}
   body.big header h1{font-size:26px}
+  body.big .sub{font-size:13px}
   @media (max-width:600px){
     header{padding:8px 10px;gap:6px}
-    header h1{font-size:18px;margin-right:6px}
+    header h1{font-size:18px}
+    .brand{margin-right:6px}
+    .sub{font-size:10px}
     nav button{padding:5px 7px;font-size:12px;margin-right:3px}
     main{padding:8px}
     .bar{gap:6px}
@@ -66,7 +71,10 @@
 </head>
 <body>
 <header>
-  <h1>MestSpace</h1>
+  <div class="brand">
+    <h1>MestSpace</h1>
+    <div class="sub">Gestione locali · Scuola secondaria Mestica</div>
+  </div>
   <nav>
     <button data-tab="settimana" class="on">Settimana</button>
     <button data-tab="assegnazioni">Assegnazioni</button>
