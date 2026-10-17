@@ -1,5 +1,5 @@
-const CACHE = 'mestspace-v2';
-const SHELL = ['./', './index.html', './app.js', './manifest.json'];
+const CACHE = 'mestspace-v3';
+const SHELL = ['./', './index.html', './app.js', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

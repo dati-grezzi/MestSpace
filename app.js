@@ -75,19 +75,26 @@ function fresh() {
     rooms: SEED.map(([piano, numero, nome, tipo, note]) => ({ id: roomKey(piano, numero, nome), piano, numero, nome, tipo, note })),
     std: [],          // assegnazioni standard (settimana tipo)
     var: [],          // variazioni con periodo dal/al
+    perm: [],         // assegnazioni fisse (permanenti), senza giorno né orario
     corta: ['1A', '1C'],
     plans: { terra: { rot: 0, points: {} }, primo: { rot: 0, points: {} } }
   };
 }
 function load() {
-  try { const s = JSON.parse(localStorage.getItem(STORE)); return s && s.v ? s : fresh(); }
-  catch (e) { return fresh(); }
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE));
+    if (s && s.v) { s.perm = s.perm || []; return s; }
+    return fresh();
+  } catch (e) { return fresh(); }
 }
 let S = load();
 let weekDate = iso(new Date());
 const save = () => localStorage.setItem(STORE, JSON.stringify(S));
 const room = id => S.rooms.find(r => r.id === id);
 const roomName = id => { const r = room(id); if (!r) return '?'; return (r.numero != null ? r.numero + ' · ' : '') + r.nome; };
+const permOf = id => S.perm.filter(p => p.roomId === id);
+const chip = l => `<span class="chip" style="background:${colorOf(l)}">${esc(l)}</span>`;
+const fixedTag = id => permOf(id).map(p => `<br><span class="fixed" style="background:${colorOf(p.etichetta)}">${esc(p.etichetta)}${p.docente ? ' · ' + esc(p.docente) : ''}</span>`).join('');
 
 /* ---------- calcolo occupazioni ---------- */
 // Una variazione attiva in una data sostituisce l'intera giornata dell'aula per quella data.
@@ -108,6 +115,11 @@ function weekItems(mon) {
 }
 function conflicts(mon) {
   const msgs = [];
+  const byRoom = {};
+  S.perm.forEach(p => (byRoom[p.roomId] = byRoom[p.roomId] || []).push(p));
+  Object.entries(byRoom).forEach(([rid, l]) => {
+    if (l.length > 1) msgs.push(`${roomName(rid)}: più assegnazioni fisse (${l.map(p => p.etichetta).join(' / ')})`);
+  });
   for (let i = 0; i < 6; i++) {
     const date = addDays(mon, i);
     const items = dayItems(date);
@@ -140,7 +152,7 @@ function renderGrid() {
   const dayNames = narrow ? [DAYS[dayIdx + 1]] : DAYS.slice(1, 7);
   renderDayTabs(all, narrow);
   const items = weekItems(mon).filter(i => dates.includes(i.date));
-  const rows = S.rooms.filter(r => r.piano === piano && items.some(i => i.roomId === r.id));
+  const rows = S.rooms.filter(r => r.piano === piano && (items.some(i => i.roomId === r.id) || permOf(r.id).length));
 
   if (!rows.length) {
     $('#grid').innerHTML = '<p>Nessuna assegnazione per questo piano in questa settimana.</p>';
@@ -149,7 +161,7 @@ function renderGrid() {
       dates.map((d, i) => { const dt = parseISO(d); return `<th>${dayNames[i]} ${dt.getDate()}/${dt.getMonth() + 1}</th>`; }).join('') +
       '</tr></thead><tbody>';
     for (const r of rows) {
-      html += `<tr><th>${esc(roomName(r.id))}</th>`;
+      html += `<tr><th>${esc(roomName(r.id))}${fixedTag(r.id)}</th>`;
       for (const d of dates) {
         const cell = items.filter(i => i.roomId === r.id && i.date === d).sort((a, b) => toMin(a.dalle) - toMin(b.dalle));
         html += '<td>' + cell.map(i =>
@@ -165,8 +177,8 @@ function renderGrid() {
     $('#grid').innerHTML = html + '</tbody></table>';
   }
 
-  const labels = [...new Set(items.map(i => i.etichetta))].sort();
-  $('#legend').innerHTML = labels.map(l => `<span class="chip" style="background:${colorOf(l)}">${esc(l)}</span>`).join('');
+  const labels = [...new Set([...items.map(i => i.etichetta), ...rows.flatMap(r => permOf(r.id).map(p => p.etichetta))])].sort();
+  $('#legend').innerHTML = labels.map(chip).join('');
 
   const c = conflicts(mon);
   $('#conflicts').innerHTML = c.length
@@ -180,12 +192,12 @@ function fillRoomSelects() {
   $('#fRoom').innerHTML = opts;
 }
 function renderAss() {
-  const list = [...S.std.map(a => ({ ...a, src: 'std' })), ...S.var.map(a => ({ ...a, src: 'var' }))]
-    .sort((a, b) => a.giorno - b.giorno || toMin(a.dalle) - toMin(b.dalle));
+  const list = [...S.perm.map(a => ({ ...a, src: 'perm' })), ...S.std.map(a => ({ ...a, src: 'std' })), ...S.var.map(a => ({ ...a, src: 'var' }))]
+    .sort((a, b) => (a.giorno || 0) - (b.giorno || 0) || toMin(a.dalle || '00:00') - toMin(b.dalle || '00:00'));
   $('#listAss').innerHTML = list.length
-    ? '<table class="grid"><thead><tr><th>Tipo</th><th>Giorno</th><th>Ora</th><th>Aula</th><th>Etichetta</th><th>Docente</th><th>Periodo</th><th></th></tr></thead><tbody>' +
-      list.map(a => `<tr><td>${a.src === 'var' ? 'Variazione' : 'Standard'}</td><td>${DAYS[a.giorno]}</td>` +
-        `<td>${a.dalle}–${a.alle}</td><td>${esc(roomName(a.roomId))}</td><td>${esc(a.etichetta)}</td>` +
+    ? '<table class="grid"><thead><tr><th>Modalità</th><th>Giorno</th><th>Ora</th><th>Aula</th><th>Etichetta</th><th>Docente</th><th>Periodo</th><th></th></tr></thead><tbody>' +
+      list.map(a => `<tr><td>${a.src === 'perm' ? 'Fissa' : a.src === 'var' ? 'Variazione' : 'Oraria'}</td><td>${a.src === 'perm' ? '—' : DAYS[a.giorno]}</td>` +
+        `<td>${a.src === 'perm' ? '—' : a.dalle + '–' + a.alle}</td><td>${esc(roomName(a.roomId))}</td><td>${esc(a.etichetta)}</td>` +
         `<td>${esc(a.docente || '')}</td><td>${a.src === 'var' ? esc(a.dal) + (a.al ? ' → ' + esc(a.al) : '') : ''}</td>` +
         `<td><button data-del="${a.src}:${a.id}">✕</button></td></tr>`).join('') +
       '</tbody></table>'
@@ -194,19 +206,24 @@ function renderAss() {
 $('#formAss').addEventListener('submit', e => {
   e.preventDefault();
   const f = e.target;
+  const modo = f.modo.value;
   const a = {
-    id: uid(), roomId: f.roomId.value, giorno: +f.giorno.value, dalle: f.dalle.value, alle: f.alle.value,
+    id: uid(), roomId: f.roomId.value,
     etichetta: f.etichetta.value.trim(), tipo: f.tipo.value, docente: f.docente.value.trim(), note: f.note.value.trim()
   };
-  if (!a.roomId || !a.dalle || !a.alle || !a.etichetta || toMin(a.alle) <= toMin(a.dalle)) {
-    alert('Controlla aula, orari ed etichetta.'); return;
-  }
-  if (f.variazione.checked) {
-    if (!f.dal.value) { alert('Indica la data di inizio della variazione.'); return; }
-    a.dal = f.dal.value; a.al = f.al.value || null;
-    S.var.push(a);
+  if (!a.roomId || !a.etichetta) { alert('Indica aula ed etichetta.'); return; }
+  if (modo === 'fissa') {
+    S.perm.push(a);
   } else {
-    S.std.push(a);
+    a.giorno = +f.giorno.value; a.dalle = f.dalle.value; a.alle = f.alle.value;
+    if (!a.dalle || !a.alle || toMin(a.alle) <= toMin(a.dalle)) { alert('Controlla gli orari.'); return; }
+    if (modo === 'variazione') {
+      if (!f.dal.value) { alert('Indica la data di inizio della variazione.'); return; }
+      a.dal = f.dal.value; a.al = f.al.value || null;
+      S.var.push(a);
+    } else {
+      S.std.push(a);
+    }
   }
   save();
   f.etichetta.value = ''; f.docente.value = ''; f.note.value = '';
@@ -217,9 +234,27 @@ $('#listAss').addEventListener('click', e => {
   if (!b || !confirm('Eliminare questa assegnazione?')) return;
   const [src, id] = b.dataset.del.split(':');
   if (src === 'var') S.var = S.var.filter(x => x.id !== id);
+  else if (src === 'perm') S.perm = S.perm.filter(x => x.id !== id);
   else S.std = S.std.filter(x => x.id !== id);
   save(); renderAll();
 });
+
+// mostra solo i campi utili per la modalità scelta
+function updateModo() {
+  const f = $('#formAss');
+  const m = f.modo.value;
+  const show = (name, on) => {
+    const el = f.elements[name];
+    el.closest('label').hidden = !on;
+    if (name === 'dalle' || name === 'alle') el.required = on;
+  };
+  show('giorno', m !== 'fissa');
+  show('dalle', m !== 'fissa');
+  show('alle', m !== 'fissa');
+  show('dal', m === 'variazione');
+  show('al', m === 'variazione');
+}
+$('#formAss').modo.addEventListener('change', updateModo);
 
 /* ---------- planimetrie ---------- */
 const canvas = $('#planCanvas');
@@ -262,7 +297,7 @@ async function loadImg(piano) {
 function labelFor(r, mon) {
   const its = weekItems(mon).filter(i => i.roomId === r.id)
     .sort((a, b) => a.date.localeCompare(b.date) || toMin(a.dalle) - toMin(b.dalle));
-  const txt = [...new Set(its.map(i => i.etichetta))].join(' / ');
+  const txt = [...new Set([...permOf(r.id).map(p => p.etichetta), ...its.map(i => i.etichetta)])].join(' / ');
   if (r.tipo === 'classe') return txt || String(r.numero ?? r.nome);
   return (r.numero != null ? r.numero + ' · ' : '') + (txt || r.nome);
 }
@@ -438,6 +473,7 @@ $('#importFile').addEventListener('change', async e => {
   try {
     const obj = JSON.parse(await f.text());
     if (!obj.rooms || !obj.std || !obj.var) throw new Error('formato');
+    obj.perm = obj.perm || [];
     S = obj; save(); fillRoomSelects(); fillMapRooms(); $('#corta').value = S.corta.join(', '); renderAll();
   } catch (err) { alert('Backup non valido.'); }
 });
@@ -450,8 +486,93 @@ $('#resetBtn').addEventListener('click', () => {
 document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
   document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
   document.querySelectorAll('main > section').forEach(s => s.hidden = s.id !== 'tab-' + b.dataset.tab);
+  document.body.classList.remove('print-report');
   if (b.dataset.tab === 'planimetrie') drawPlan();
+  if (b.dataset.tab === 'report') renderReport();
 }));
+
+/* ---------- assegnazioni fisse iniziali (dalle planimetrie) ---------- */
+const FISSE = [
+  ['terra-3', '3A'], ['terra-4', '3C'], ['terra-5', '3B'], ['terra-8', '3D'], ['terra-9', '1C'],
+  ['primo-11', '2D'], ['primo-13', '2A'], ['primo-15', '2B'], ['primo-16', '2C'],
+  ['primo-23', '1A'], ['primo-24', '1D'], ['primo-25', '1B']
+];
+$('#fisseBtn').addEventListener('click', () => {
+  const nuove = FISSE.filter(([rid]) => room(rid) && !permOf(rid).length);
+  if (!nuove.length) { alert('Queste aule hanno già un\'assegnazione fissa.'); return; }
+  if (!confirm(`Aggiungere ${nuove.length} assegnazioni fisse (classi nelle aule indicate dalle planimetrie, 1C in aula 9)?`)) return;
+  nuove.forEach(([rid, c]) => S.perm.push({ id: uid(), roomId: rid, etichetta: c, tipo: 'classe', docente: '', note: 'da planimetria' }));
+  save(); renderAll();
+});
+
+/* ---------- report ---------- */
+function reportData() {
+  const mon = mondayOf(weekDate);
+  const filtro = $('#repPiano').value;
+  const showFree = $('#repFree').checked;
+  const items = weekItems(mon);
+  const rows = S.rooms
+    .filter(r => filtro === 'tutti' || r.piano === filtro)
+    .map(r => ({
+      room: r,
+      fisse: permOf(r.id),
+      orari: items.filter(i => i.roomId === r.id).sort((a, b) => a.date.localeCompare(b.date) || toMin(a.dalle) - toMin(b.dalle))
+    }))
+    .filter(x => showFree || x.fisse.length || x.orari.length);
+  return { mon, rows };
+}
+function renderReport() {
+  const { mon, rows } = reportData();
+  const fmt = s => { const d = parseISO(s); return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`; };
+  const labels = new Set();
+  const section = piano => {
+    const rs = rows.filter(x => x.room.piano === piano);
+    if (!rs.length) return '';
+    return `<h3>${piano === 'terra' ? 'Piano terra' : 'Primo piano'}</h3>` +
+      '<table class="grid report"><thead><tr><th>Aula</th><th>Tipo</th><th>Assegnazione fissa</th><th>Orario della settimana</th></tr></thead><tbody>' +
+      rs.map(x => {
+        x.fisse.forEach(p => labels.add(p.etichetta));
+        x.orari.forEach(i => labels.add(i.etichetta));
+        const fisse = x.fisse.map(p => chip(p.etichetta) + (p.docente ? ' ' + esc(p.docente) : '')).join(' ') || '—';
+        const orari = x.orari.map(i =>
+          `<div>${DAYS[parseISO(i.date).getDay()]} ${i.dalle}–${i.alle} ${chip(i.etichetta)}` +
+          (S.corta.includes(i.etichetta) ? ' <i>(corta)</i>' : '') +
+          (i.src === 'var' ? ' <span class="vtag">var.</span>' : '') +
+          (i.docente ? ` <small>${esc(i.docente)}</small>` : '') + '</div>').join('') || '—';
+        return `<tr><th>${esc(roomName(x.room.id))}</th><td>${esc(x.room.tipo)}</td><td>${fisse}</td><td>${orari}</td></tr>`;
+      }).join('') + '</tbody></table>';
+  };
+  $('#reportHead').innerHTML =
+    '<h2>Assegnazione locali · Scuola secondaria Mestica</h2>' +
+    `<p>Settimana dal ${fmt(mon)} al ${fmt(addDays(mon, 5))}. Per cambiare settimana usa il tab Settimana.</p>`;
+  const body = section('terra') + section('primo');
+  $('#reportBody').innerHTML = body
+    ? body + '<h3>Legenda</h3>' + [...labels].sort().map(chip).join('') + '<p class="hint">Bordo tratteggiato / “var.” = variazione. “(corta)” = settimana corta.</p>'
+    : '<p>Nessuna assegnazione da mostrare.</p>';
+}
+$('#repPiano').addEventListener('change', renderReport);
+$('#repFree').addEventListener('change', renderReport);
+$('#repPrint').addEventListener('click', () => {
+  renderReport();
+  document.body.classList.add('print-report');
+  window.print();
+});
+window.addEventListener('afterprint', () => document.body.classList.remove('print-report'));
+$('#repCsv').addEventListener('click', () => {
+  const { mon, rows } = reportData();
+  const q = s => `"${String(s ?? '').replace(/"/g, '""')}"`;
+  const out = [['piano', 'numero', 'locale', 'tipo', 'assegnazione', 'giorno', 'dalle', 'alle', 'etichetta', 'docente', 'variazione']];
+  rows.forEach(x => {
+    const base = [x.room.piano, x.room.numero ?? '', x.room.nome, x.room.tipo];
+    x.fisse.forEach(p => out.push([...base, 'fissa', '', '', '', p.etichetta, p.docente || '', '']));
+    x.orari.forEach(i => out.push([...base, 'oraria', DAYS[parseISO(i.date).getDay()], i.dalle, i.alle, i.etichetta, i.docente || '', i.src === 'var' ? 'sì' : '']));
+  });
+  const blob = new Blob(['﻿' + out.map(r => r.map(q).join(';')).join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `assegnazioni-${mon}.csv`;
+  a.click();
+});
 
 $('#dayTabs').addEventListener('click', e => {
   const b = e.target.closest('[data-day]');
@@ -470,10 +591,12 @@ function renderAll() {
   $('#weekPick').value = weekDate;
   renderGrid();
   renderAss();
+  renderReport();
   drawPlan();
 }
 if (!localStorage.getItem(UI_KEY)) UI.day = Math.max(0, Math.min(5, new Date().getDay() - 1));
 applyUI();
+updateModo();
 fillRoomSelects();
 fillMapRooms();
 renderAll();

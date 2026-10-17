@@ -5,13 +5,22 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MestSpace</title>
 <link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#003399">
 <style>
   :root{--blue:#003399;--mid:#3b78c4;--line:#9fbfdf;--bg:#cfe2f3;--panel:#ffffff;--link:#0066cc}
   *{box-sizing:border-box}
   body{margin:0;font:13px/1.4 Verdana,Tahoma,Arial,sans-serif;color:#003366;background:var(--bg)}
   header{background:linear-gradient(#5b93d6,#003399);color:#fff;padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-bottom:3px solid #001f66}
-  .brand{margin-right:12px}
+  .brand{margin-right:12px;display:flex;align-items:center;gap:10px}
+  .logo{width:44px;height:44px;flex:0 0 auto;filter:drop-shadow(1px 1px 0 #001f66)}
+  .fixed{display:inline-block;border-radius:3px;padding:0 5px;font-size:11px;font-weight:normal;margin-top:2px;color:#003366}
+  form.card label[hidden]{display:none}
+  .report th{white-space:normal}
+  .report td{vertical-align:top}
+  #reportHead h2{margin:0 0 4px;font-size:18px}
+  @page report{size:A4 portrait;margin:12mm}
   header h1{font-size:22px;font-style:italic;font-weight:bold;margin:0;letter-spacing:-0.5px;text-shadow:1px 1px 0 #001f66}
   .sub{font-size:11px;color:#dbe9f7;letter-spacing:.2px;margin-top:1px}
   nav button{background:linear-gradient(#7aa9e0,#2a63b5);color:#fff;border:1px solid #001f66;border-radius:4px;padding:6px 10px;margin-right:4px;cursor:pointer;font-weight:bold}
@@ -52,7 +61,8 @@
   @media (max-width:600px){
     header{padding:8px 10px;gap:6px}
     header h1{font-size:18px}
-    .brand{margin-right:6px}
+    .brand{margin-right:6px;gap:8px}
+    .logo{width:34px;height:34px}
     .sub{font-size:10px}
     nav button{padding:5px 7px;font-size:12px;margin-right:3px}
     main{padding:8px}
@@ -61,9 +71,16 @@
   }
   @media print{
     @page{size:A3 landscape;margin:10mm}
-    header,.bar,#conflicts,form,#tab-assegnazioni,#tab-planimetrie,#tab-impostazioni{display:none!important}
+    header,.bar,#conflicts,form,#tab-assegnazioni,#tab-planimetrie,#tab-impostazioni,#tab-report{display:none!important}
     main{padding:0}
     #tab-settimana{display:block!important}
+    body.print-report #tab-settimana{display:none!important}
+    body.print-report #tab-report{display:block!important;page:report}
+    body.print-report #tab-report .bar{display:none!important}
+    body.print-report{background:#fff}
+    .report th,.report td{font-size:11px;padding:3px}
+    .report tr{break-inside:avoid}
+    .chip,.fixed,.vtag{-webkit-print-color-adjust:exact;print-color-adjust:exact}
     table.grid td{min-width:0}
     .ev{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   }
@@ -72,13 +89,27 @@
 <body>
 <header>
   <div class="brand">
-    <h1>MestSpace</h1>
-    <div class="sub">Gestione locali · Scuola secondaria Mestica</div>
+    <svg class="logo" viewBox="0 0 48 48" role="img" aria-label="Logo scuola">
+      <rect x="2" y="2" width="44" height="44" rx="10" fill="#fff"/>
+      <rect x="23.2" y="4" width="1.6" height="6" fill="#003399"/>
+      <path d="M24.8 4 L31 6 L24.8 8 Z" fill="#dc2626"/>
+      <path d="M24 10 L8 19 H40 Z" fill="#003399"/>
+      <rect x="11" y="20" width="26" height="16" fill="#3b78c4"/>
+      <rect x="14" y="23" width="4" height="5" fill="#fff"/>
+      <rect x="30" y="23" width="4" height="5" fill="#fff"/>
+      <rect x="22" y="27" width="4" height="9" fill="#fff"/>
+      <rect x="8" y="36" width="32" height="3" fill="#003399"/>
+    </svg>
+    <div>
+      <h1>MestSpace</h1>
+      <div class="sub">Gestione locali · Scuola secondaria Mestica</div>
+    </div>
   </div>
   <nav>
     <button data-tab="settimana" class="on">Settimana</button>
     <button data-tab="assegnazioni">Assegnazioni</button>
     <button data-tab="planimetrie">Planimetrie</button>
+    <button data-tab="report">Report</button>
     <button data-tab="impostazioni">Impostazioni</button>
   </nav>
 </header>
@@ -103,6 +134,13 @@
 
   <section id="tab-assegnazioni" hidden>
     <form id="formAss" class="card">
+      <label>Modalità
+        <select name="modo">
+          <option value="oraria">Oraria (settimana tipo)</option>
+          <option value="variazione">Variazione (periodo)</option>
+          <option value="fissa">Fissa (permanente, senza giorno e orario)</option>
+        </select>
+      </label>
       <label>Tipo
         <select name="tipo"><option value="classe">Classe</option><option value="attivita">Attività</option></select>
       </label>
@@ -118,7 +156,6 @@
       <label>Classe / attività <input name="etichetta" placeholder="es. 1C o Corso KET" required></label>
       <label>Docente <input name="docente" placeholder="facoltativo"></label>
       <label>Note <input name="note" placeholder="facoltativo"></label>
-      <label><span><input type="checkbox" name="variazione"> Variazione</span></label>
       <label>Dal <input type="date" name="dal"></label>
       <label>Al <input type="date" name="al"></label>
       <button class="primary" type="submit">Aggiungi</button>
@@ -156,11 +193,30 @@
       <button id="fontBtn">Carattere: A</button>
     </div>
     <div class="bar">
+      <button id="fisseBtn">Precompila assegnazioni fisse delle classi</button>
+    </div>
+    <p class="hint">Aggiunge le classi nelle aule indicate dalle planimetrie (3A, 3B, 3C, 3D, 2A-2D, 1A, 1B, 1D) e la 1C in aula 9. Le aule che hanno già un'assegnazione fissa non vengono toccate.</p>
+    <div class="bar">
       <button id="exportBtn">Esporta backup (JSON)</button>
       <label>Importa backup <input type="file" id="importFile" accept="application/json"></label>
       <button id="resetBtn">Azzera dati</button>
     </div>
     <p class="hint">I dati restano su questo dispositivo. Esporta un backup periodicamente.</p>
+  </section>
+
+  <section id="tab-report" hidden>
+    <div class="bar">
+      <select id="repPiano">
+        <option value="tutti">Tutti i piani</option>
+        <option value="terra">Piano terra</option>
+        <option value="primo">Primo piano</option>
+      </select>
+      <label><input type="checkbox" id="repFree"> Mostra anche i locali senza assegnazioni</label>
+      <button class="primary" id="repPrint">Stampa / PDF</button>
+      <button id="repCsv">Esporta CSV</button>
+    </div>
+    <div id="reportHead"></div>
+    <div id="reportBody"></div>
   </section>
 </main>
 
