@@ -35,6 +35,25 @@
   form.card button{align-self:end}
   canvas{max-width:100%;height:auto;border:1px solid var(--line);background:#fff;cursor:crosshair}
   .hint{color:#555;font-size:13px}
+  #grid{overflow-x:auto}
+  #dayTabs{display:flex;gap:4px;overflow-x:auto;margin-bottom:8px}
+  #dayTabs[hidden]{display:none}
+  #dayTabs button{flex:0 0 auto;font-weight:bold;padding:6px 9px}
+  #dayTabs button.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+  body.big{font-size:17px}
+  body.big .ev{font-size:15px}
+  body.big table.grid th{font-size:15px}
+  body.big button,body.big select,body.big input{font-size:16px}
+  body.big nav button{font-size:16px}
+  body.big header h1{font-size:26px}
+  @media (max-width:600px){
+    header{padding:8px 10px;gap:6px}
+    header h1{font-size:18px;margin-right:6px}
+    nav button{padding:5px 7px;font-size:12px;margin-right:3px}
+    main{padding:8px}
+    .bar{gap:6px}
+    table.grid td{min-width:150px}
+  }
   @media print{
     @page{size:A3 landscape;margin:10mm}
     header,.bar,#conflicts,form,#tab-assegnazioni,#tab-planimetrie,#tab-impostazioni{display:none!important}
@@ -69,6 +88,7 @@
       <button class="primary" onclick="window.print()">Stampa / PDF</button>
     </div>
     <div id="conflicts"></div>
+    <div id="dayTabs" hidden></div>
     <div id="grid"></div>
     <div id="legend"></div>
   </section>
@@ -122,6 +142,9 @@
         <input id="corta" size="30">
       </label>
       <button id="saveCorta">Salva</button>
+    </div>
+    <div class="bar">
+      <button id="fontBtn">Carattere: A</button>
     </div>
     <div class="bar">
       <button id="exportBtn">Esporta backup (JSON)</button>

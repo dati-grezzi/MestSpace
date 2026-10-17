@@ -15,6 +15,13 @@ const overlap = (a, b) => toMin(a.dalle) < toMin(b.alle) && toMin(b.dalle) < toM
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const colorOf = s => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 70% 82%)`; };
 
+/* ---------- preferenze di visualizzazione (solo questo dispositivo) ---------- */
+const UI_KEY = 'mestspace-ui';
+let UI = { big: false, day: 0 };
+try { Object.assign(UI, JSON.parse(localStorage.getItem(UI_KEY)) || {}); } catch (e) {}
+const saveUI = () => { try { localStorage.setItem(UI_KEY, JSON.stringify(UI)); } catch (e) {} };
+const isNarrow = () => window.matchMedia('(max-width: 600px)').matches;
+
 /* ---------- aule di partenza (da planimetrie) ---------- */
 const SEED = [
   ['terra', 1, 'Biblioteca', 'biblioteca', ''],
@@ -117,18 +124,29 @@ function conflicts(mon) {
 }
 
 /* ---------- tab Settimana ---------- */
+function renderDayTabs(all, narrow) {
+  const el = $('#dayTabs');
+  el.hidden = !narrow;
+  if (!narrow) { el.innerHTML = ''; return; }
+  el.innerHTML = all.map((d, i) => `<button data-day="${i}" class="${i === UI.day ? 'on' : ''}">${DAYS[i + 1]} ${parseISO(d).getDate()}</button>`).join('');
+}
 function renderGrid() {
   const piano = $('#pianoSel').value;
   const mon = mondayOf(weekDate);
-  const dates = [0, 1, 2, 3, 4, 5].map(i => addDays(mon, i));
-  const items = weekItems(mon);
+  const all = [0, 1, 2, 3, 4, 5].map(i => addDays(mon, i));
+  const narrow = isNarrow();
+  const dayIdx = Math.min(Math.max(UI.day, 0), 5);
+  const dates = narrow ? [all[dayIdx]] : all;
+  const dayNames = narrow ? [DAYS[dayIdx + 1]] : DAYS.slice(1, 7);
+  renderDayTabs(all, narrow);
+  const items = weekItems(mon).filter(i => dates.includes(i.date));
   const rows = S.rooms.filter(r => r.piano === piano && items.some(i => i.roomId === r.id));
 
   if (!rows.length) {
     $('#grid').innerHTML = '<p>Nessuna assegnazione per questo piano in questa settimana.</p>';
   } else {
     let html = '<table class="grid"><thead><tr><th>Aula</th>' +
-      dates.map((d, i) => { const dt = parseISO(d); return `<th>${DAYS[i + 1]} ${dt.getDate()}/${dt.getMonth() + 1}</th>`; }).join('') +
+      dates.map((d, i) => { const dt = parseISO(d); return `<th>${dayNames[i]} ${dt.getDate()}/${dt.getMonth() + 1}</th>`; }).join('') +
       '</tr></thead><tbody>';
     for (const r of rows) {
       html += `<tr><th>${esc(roomName(r.id))}</th>`;
@@ -388,6 +406,18 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   if (b.dataset.tab === 'planimetrie') drawPlan();
 }));
 
+$('#dayTabs').addEventListener('click', e => {
+  const b = e.target.closest('[data-day]');
+  if (!b) return;
+  UI.day = +b.dataset.day; saveUI(); renderGrid();
+});
+const applyUI = () => {
+  document.body.classList.toggle('big', UI.big);
+  $('#fontBtn').textContent = UI.big ? 'Carattere: A+ (attivo)' : 'Carattere: A';
+};
+$('#fontBtn').addEventListener('click', () => { UI.big = !UI.big; saveUI(); applyUI(); });
+window.matchMedia('(max-width: 600px)').addEventListener('change', () => renderGrid());
+
 /* ---------- avvio ---------- */
 function renderAll() {
   $('#weekPick').value = weekDate;
@@ -395,6 +425,8 @@ function renderAll() {
   renderAss();
   drawPlan();
 }
+if (!localStorage.getItem(UI_KEY)) UI.day = Math.max(0, Math.min(5, new Date().getDay() - 1));
+applyUI();
 fillRoomSelects();
 fillMapRooms();
 renderAll();
