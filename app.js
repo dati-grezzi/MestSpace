@@ -301,15 +301,17 @@ function labelFor(r, mon) {
   if (r.tipo === 'classe') return txt || String(r.numero ?? r.nome);
   return (r.numero != null ? r.numero + ' · ' : '') + (txt || r.nome);
 }
-function drawLabel(text, x, y) {
+let labelBoxes = [];   // rettangoli delle etichette disegnate, per trascinarle
+function drawLabel(text, x, y, rid) {
   // la dimensione segue la larghezza del disegno, così resta leggibile anche su immagini grandi
   const fs = Math.max(14, Math.round(canvas.width / 55));
   const h = fs * 1.6;
   ctx.font = `bold ${fs}px sans-serif`;
   const w = ctx.measureText(text).width + fs * 0.8;
   const cy = y - h / 2 - 4;
+  labelBoxes.push({ rid, x: x - w / 2, y: cy - h / 2, w, h });
   ctx.fillStyle = 'rgba(255,255,255,.88)';
-  ctx.strokeStyle = '#003399';
+  ctx.strokeStyle = '#1F3027';
   ctx.lineWidth = Math.max(1, fs / 12);
   ctx.fillRect(x - w / 2, cy - h / 2, w, h);
   ctx.strokeRect(x - w / 2, cy - h / 2, w, h);
@@ -345,13 +347,14 @@ async function drawPlan() {
 
   const mon = mondayOf(weekDate);
   const showLabels = $('#showLabels').checked;
+  labelBoxes = [];
   for (const [rid, pt] of Object.entries(p.points)) {
     const r = room(rid);
     if (!r) continue;
     const x = pt.x * W, y = pt.y * H;
-    ctx.fillStyle = '#dc2626';
-    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
-    if (showLabels) drawLabel(labelFor(r, mon), x, y);
+    ctx.fillStyle = '#2E7D4F';
+    ctx.beginPath(); ctx.arc(x, y, Math.max(3, W / 400), 0, Math.PI * 2); ctx.fill();
+    if (showLabels) drawLabel(labelFor(r, mon), x, y, rid);
   }
 }
 function fillMapRooms() {
@@ -359,18 +362,67 @@ function fillMapRooms() {
   $('#mapRoom').innerHTML = S.rooms.filter(r => r.piano === piano)
     .map(r => `<option value="${r.id}">${esc(roomName(r.id))}</option>`).join('');
 }
-canvas.addEventListener('click', e => {
-  if (!canvas.width) return;
-  const rect = canvas.getBoundingClientRect();
-  const x = (e.clientX - rect.left) / rect.width;
-  const y = (e.clientY - rect.top) / rect.height;
+/* posizionare e trascinare le etichette */
+let drag = null;
+const canvasXY = e => {
+  const r = canvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * canvas.width / r.width, y: (e.clientY - r.top) * canvas.height / r.height };
+};
+const labelAt = p => [...labelBoxes].reverse().find(b => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h);
+canvas.addEventListener('pointerdown', e => {
+  if (!canvas.width || !Object.keys(S.plans[$('#planPiano').value].points).length && $('#moveMode').checked) return;
+  const p = canvasXY(e);
   const piano = $('#planPiano').value;
+  const move = $('#moveMode').checked;
+  // col mouse si trascina sempre; sul touch serve la modalità "Sposta etichette"
+  const b = (move || e.pointerType === 'mouse') ? labelAt(p) : null;
+  if (b) {
+    const pt = S.plans[piano].points[b.rid];
+    drag = { rid: b.rid, piano, dx: p.x - pt.x * canvas.width, dy: p.y - pt.y * canvas.height, id: e.pointerId };
+    canvas.setPointerCapture(e.pointerId);
+    canvas.style.cursor = 'grabbing';
+    e.preventDefault();
+    return;
+  }
+  if (move) return;   // in modalità sposta un tocco a vuoto non crea etichette
   const rid = $('#mapRoom').value;
   if (!rid) return;
-  S.plans[piano].points[rid] = { x, y };
+  S.plans[piano].points[rid] = { x: p.x / canvas.width, y: p.y / canvas.height };
   save();
   drawPlan();
   $('#mapRoom').selectedIndex = Math.min($('#mapRoom').selectedIndex + 1, $('#mapRoom').options.length - 1);
+});
+canvas.addEventListener('pointermove', e => {
+  const p = canvasXY(e);
+  if (!drag) {
+    if (e.pointerType === 'mouse') canvas.style.cursor = labelAt(p) ? 'grab' : 'crosshair';
+    return;
+  }
+  if (e.pointerId !== drag.id) return;
+  const x = Math.min(1, Math.max(0, (p.x - drag.dx) / canvas.width));
+  const y = Math.min(1, Math.max(0, (p.y - drag.dy) / canvas.height));
+  S.plans[drag.piano].points[drag.rid] = { x, y };
+  drawPlan();
+});
+const endDrag = e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  drag = null;
+  canvas.style.cursor = 'crosshair';
+  save();
+};
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+$('#moveMode').addEventListener('change', () => {
+  // con "Sposta etichette" attivo il tocco sul disegno non fa scorrere la pagina
+  canvas.style.touchAction = $('#moveMode').checked ? 'none' : 'auto';
+});
+$('#clearPts').addEventListener('click', () => {
+  const piano = $('#planPiano').value;
+  const n = Object.keys(S.plans[piano].points).length;
+  if (!n) { alert('Non ci sono etichette posizionate su questo piano.'); return; }
+  if (!confirm(`Eliminare tutte le ${n} etichette di questo piano? Le assegnazioni non vengono toccate.`)) return;
+  S.plans[piano].points = {};
+  save(); drawPlan();
 });
 $('#planPiano').addEventListener('change', () => {
   img = null; fillMapRooms();
