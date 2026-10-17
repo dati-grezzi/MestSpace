@@ -29,10 +29,13 @@
   header h1{font-family:'Zilla Slab',Georgia,serif;font-weight:700;font-size:30px;letter-spacing:-.01em;line-height:1;margin:0}
   header h1 .m{color:var(--red)}
   .sub{font-size:13px;color:var(--ink-soft);margin-top:3px;font-weight:500}
-  nav{display:flex;gap:6px;flex-wrap:wrap}
-  nav button{padding:9px 12px;border:1.5px solid var(--rule);border-radius:10px;background:var(--paper2);font-weight:700;font-size:13px;color:var(--ink-soft);cursor:pointer;font-family:'Zilla Slab',Georgia,serif;transition:.12s}
-  nav button.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
-  main{padding:16px 14px;max-width:1280px;margin:0 auto}
+  /* barra inferiore a schede, come in SOStituto */
+  nav{position:fixed;bottom:0;left:0;right:0;max-width:760px;margin:0 auto;display:flex;background:var(--paper2);border-top:2px solid var(--ink);z-index:100}
+  nav button{flex:1;border:none;border-radius:0;background:none;padding:9px 0 7px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--ink-soft);font-family:inherit}
+  nav button.on{color:var(--teal)}
+  nav .ic{width:26px;height:26px}
+  nav .lb{font-size:11.5px;font-weight:700}
+  main{padding:16px 14px 90px;max-width:1280px;margin:0 auto}
   section[hidden]{display:none}
   h3{font-family:'Zilla Slab',Georgia,serif;font-weight:600;font-size:15px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin:16px 0 10px;display:flex;align-items:center;gap:8px}
   h3::after{content:"";flex:1;height:1px;background:var(--rule)}
@@ -76,7 +79,8 @@
   body.big .ev{font-size:15px}
   body.big table.grid th{font-size:15px}
   body.big button,body.big select,body.big input{font-size:16px}
-  body.big nav button{font-size:16px}
+  body.big nav .lb{font-size:13px}
+  body.big nav .ic{width:30px;height:30px}
   body.big header h1{font-size:34px}
   body.big .sub{font-size:15px}
   @media (max-width:600px){
@@ -84,7 +88,6 @@
     header h1{font-size:24px}
     .logo{width:38px;height:38px}
     .sub{font-size:11px}
-    nav button{padding:7px 9px;font-size:12px}
     main{padding:10px}
     .bar{gap:6px}
     #grid table.grid td{min-width:0}
@@ -93,7 +96,7 @@
   @media print{
     @page{size:A3 landscape;margin:10mm}
     body{background:#fff}
-    header,.bar,#conflicts,form,#tab-assegnazioni,#tab-planimetrie,#tab-impostazioni,#tab-report{display:none!important}
+    header,nav,.bar,#conflicts,form,#tab-assegnazioni,#tab-planimetrie,#tab-impostazioni,#tab-report{display:none!important}
     main{padding:0;max-width:none}
     #tab-settimana{display:block!important}
     body.print-report #tab-settimana{display:none!important}
@@ -109,29 +112,20 @@
 <body>
 <header>
   <div class="brand">
-    <svg class="logo" viewBox="0 0 48 48" role="img" aria-label="Logo scuola">
-      <rect x="1.5" y="1.5" width="45" height="45" rx="10" fill="#FBFAF5" stroke="#DED8C6" stroke-width="2"/>
-      <rect x="23.2" y="5" width="1.6" height="6" fill="#232B39"/>
-      <path d="M24.8 5 L31 7 L24.8 9 Z" fill="#C0403A"/>
-      <path d="M24 11 L8 20 H40 Z" fill="#232B39"/>
-      <rect x="11" y="21" width="26" height="15" fill="#1C6E6A"/>
-      <rect x="14" y="24" width="4" height="5" fill="#F3F0E7"/>
-      <rect x="30" y="24" width="4" height="5" fill="#F3F0E7"/>
-      <rect x="22" y="28" width="4" height="8" fill="#F3F0E7"/>
-      <rect x="8" y="36" width="32" height="3" fill="#232B39"/>
+    <svg class="logo" viewBox="0 0 48 48" role="img" aria-label="Bussola">
+      <circle cx="24" cy="24" r="20" fill="#FBFAF5" stroke="#232B39" stroke-width="3"/>
+      <path d="M24 7v5M24 36v5M7 24h5M36 24h5" stroke="#232B39" stroke-width="2.2" stroke-linecap="round"/>
+      <g transform="rotate(45 24 24)">
+        <path d="M24 11 L29.5 24 H18.5 Z" fill="#C0403A"/>
+        <path d="M24 37 L29.5 24 H18.5 Z" fill="#1C6E6A"/>
+      </g>
+      <circle cx="24" cy="24" r="2.5" fill="#232B39"/>
     </svg>
     <div>
       <h1><span class="m">Mest</span>Space</h1>
       <div class="sub">Gestione locali · Scuola secondaria Mestica</div>
     </div>
   </div>
-  <nav>
-    <button data-tab="settimana" class="on">Settimana</button>
-    <button data-tab="assegnazioni">Assegnazioni</button>
-    <button data-tab="planimetrie">Planimetrie</button>
-    <button data-tab="report">Report</button>
-    <button data-tab="impostazioni">Impostazioni</button>
-  </nav>
 </header>
 
 <main>
@@ -239,6 +233,29 @@
     <div id="reportBody"></div>
   </section>
 </main>
+
+<nav>
+  <button data-tab="settimana" class="on" aria-label="Settimana">
+    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><path d="M7.5 13h3M13.5 13h3M7.5 16.5h3"/></svg>
+    <span class="lb">Settimana</span>
+  </button>
+  <button data-tab="assegnazioni" aria-label="Assegn.">
+    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2"/></svg>
+    <span class="lb">Assegn.</span>
+  </button>
+  <button data-tab="planimetrie" aria-label="Planim.">
+    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4z"/><path d="M9 4v14M15 6v14"/></svg>
+    <span class="lb">Planim.</span>
+  </button>
+  <button data-tab="report" aria-label="Report">
+    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>
+    <span class="lb">Report</span>
+  </button>
+  <button data-tab="impostazioni" aria-label="Impost.">
+    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+    <span class="lb">Impost.</span>
+  </button>
+</nav>
 
 <script src="app.js"></script>
 </body>
