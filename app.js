@@ -267,16 +267,21 @@ function labelFor(r, mon) {
   return (r.numero != null ? r.numero + ' · ' : '') + (txt || r.nome);
 }
 function drawLabel(text, x, y) {
-  ctx.font = 'bold 14px sans-serif';
-  const w = ctx.measureText(text).width + 10;
-  ctx.fillStyle = 'rgba(255,255,255,.85)';
-  ctx.strokeStyle = '#1d4ed8';
-  ctx.fillRect(x - w / 2, y - 11, w, 22);
-  ctx.strokeRect(x - w / 2, y - 11, w, 22);
+  // la dimensione segue la larghezza del disegno, così resta leggibile anche su immagini grandi
+  const fs = Math.max(14, Math.round(canvas.width / 55));
+  const h = fs * 1.6;
+  ctx.font = `bold ${fs}px sans-serif`;
+  const w = ctx.measureText(text).width + fs * 0.8;
+  const cy = y - h / 2 - 4;
+  ctx.fillStyle = 'rgba(255,255,255,.88)';
+  ctx.strokeStyle = '#003399';
+  ctx.lineWidth = Math.max(1, fs / 12);
+  ctx.fillRect(x - w / 2, cy - h / 2, w, h);
+  ctx.strokeRect(x - w / 2, cy - h / 2, w, h);
   ctx.fillStyle = '#111';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, x, y);
+  ctx.fillText(text, x, cy);
 }
 async function drawPlan() {
   const piano = $('#planPiano').value;
@@ -311,7 +316,7 @@ async function drawPlan() {
     const x = pt.x * W, y = pt.y * H;
     ctx.fillStyle = '#dc2626';
     ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
-    if (showLabels) drawLabel(labelFor(r, mon), x, y - 14);
+    if (showLabels) drawLabel(labelFor(r, mon), x, y);
   }
 }
 function fillMapRooms() {
@@ -332,11 +337,53 @@ canvas.addEventListener('click', e => {
   drawPlan();
   $('#mapRoom').selectedIndex = Math.min($('#mapRoom').selectedIndex + 1, $('#mapRoom').options.length - 1);
 });
-$('#planPiano').addEventListener('change', () => { img = null; fillMapRooms(); drawPlan(); });
+$('#planPiano').addEventListener('change', () => {
+  img = null; fillMapRooms();
+  $('#pdfPage').value = $('#planPiano').value === 'primo' ? 2 : 1;
+  drawPlan();
+});
+
+// Lettura PDF: pdf.js viene scaricato solo al primo uso (serve connessione), poi resta in cache.
+const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+let pdfjsPromise = null;
+function loadPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (!pdfjsPromise) pdfjsPromise = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = PDFJS + 'pdf.min.js';
+    s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; res(window.pdfjsLib); };
+    s.onerror = () => { pdfjsPromise = null; rej(new Error('lettore PDF non raggiungibile: serve la connessione')); };
+    document.head.appendChild(s);
+  });
+  return pdfjsPromise;
+}
+async function pdfToPng(file, pageNum) {
+  const lib = await loadPdfJs();
+  const doc = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
+  if (pageNum < 1 || pageNum > doc.numPages) throw new Error(`il PDF ha ${doc.numPages} pagine`);
+  const page = await doc.getPage(pageNum);
+  const v0 = page.getViewport({ scale: 1 });
+  const vp = page.getViewport({ scale: Math.min(3, 2400 / Math.max(v0.width, v0.height)) });
+  const c = document.createElement('canvas');
+  c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+  const cx = c.getContext('2d');
+  cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height);
+  await page.render({ canvasContext: cx, viewport: vp }).promise;
+  return new Promise(r => c.toBlob(r, 'image/png'));
+}
 $('#planFile').addEventListener('change', async e => {
   const f = e.target.files[0];
   if (!f) return;
-  await idbPut('plan-' + $('#planPiano').value, f);
+  try {
+    const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+    const blob = isPdf ? await pdfToPng(f, +$('#pdfPage').value || 1) : f;
+    await idbPut('plan-' + $('#planPiano').value, blob);
+  } catch (err) {
+    alert('Impossibile caricare il file: ' + err.message);
+    e.target.value = '';
+    return;
+  }
+  e.target.value = '';
   img = null; imgPiano = null;
   drawPlan();
 });

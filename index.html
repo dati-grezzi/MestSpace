@@ -132,7 +132,8 @@
         <option value="terra">Piano terra</option>
         <option value="primo">Primo piano</option>
       </select>
-      <input type="file" id="planFile" accept="image/*">
+      <label>Pagina PDF <input type="number" id="pdfPage" min="1" value="1" style="width:4em"></label>
+      <input type="file" id="planFile" accept="image/*,application/pdf">
       <button id="rotBtn">Ruota 90°</button>
       <select id="mapRoom"></select>
       <button id="remPt">Rimuovi punto</button>
