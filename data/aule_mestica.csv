@@ -1,0 +1,42 @@
+piano,numero,nome,tipo,note
+terra,1,Biblioteca,biblioteca,
+terra,2,Aula professori,aula,
+terra,3,Aula 3A,classe,
+terra,4,Aula 3C,classe,
+terra,5,Aula 3B,classe,
+terra,6,Laboratorio idee,laboratorio,usato da sostegno
+terra,7,Aula pianoforte,strumento,
+terra,8,Aula 3D,classe,
+terra,9,Aula francese / lab info PC,classe,verificare: nella planimetria risulta anche come lab info PC; da oct 1C spostata qui
+terra,10,Lab multimediale S.T.C.,laboratorio,
+terra,,Presidenza,ufficio,
+terra,,Segreteria,ufficio,
+terra,,Ufficio collaboratori DS,ufficio,
+terra,,Sicurezza,ufficio,
+terra,,Ufficio protocollo,ufficio,
+terra,,Ufficio contabilità,ufficio,
+terra,,Ufficio personale,ufficio,
+terra,,DSGA,ufficio,
+terra,,Magazzino,deposito,
+terra,,Archivio,deposito,
+terra,,Aula tecnici,laboratorio,
+terra,,Palestra,palestra,
+terra,,Spogliatoi,servizi,tre spogliatoi
+terra,,Settore A,spazio comune,gradinata
+primo,11,Aula 2D,classe,
+primo,12,Aula francese sax,strumento,
+primo,13,Aula 2A,classe,
+primo,14,Aula tromba lab info,strumento,
+primo,15,Aula 2B,classe,
+primo,16,Aula fisarmonica 2C,strumento,
+primo,17,Aula musica piano M. Insieme,strumento,
+primo,18,Lab informatica (ex 1C),laboratorio,da oct la 1C va in aula 9
+primo,19,Aula spagnolo lab info,laboratorio,
+primo,20,Lab scienze,laboratorio,
+primo,21,Lab arte,laboratorio,
+primo,22,Magazzino sedie/banchi,deposito,
+primo,23,Aula 1A,classe,settimana corta
+primo,24,Aula 1D,classe,
+primo,25,Aula 1B,classe,
+primo,26,Lab informatica,laboratorio,
+primo,27,Lab informatica,laboratorio,

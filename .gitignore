@@ -1,0 +1,7 @@
+# Dati reali della scuola: non vanno pubblicati
+*.pdf
+planimetrie/
+backup-*.json
+mestspace-backup-*.json
+anteprima.html
+.DS_Store

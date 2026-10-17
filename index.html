@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MestSpace</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#003399">
+<style>
+  :root{--blue:#003399;--mid:#3b78c4;--line:#9fbfdf;--bg:#cfe2f3;--panel:#ffffff;--link:#0066cc}
+  *{box-sizing:border-box}
+  body{margin:0;font:13px/1.4 Verdana,Tahoma,Arial,sans-serif;color:#003366;background:var(--bg)}
+  header{background:linear-gradient(#5b93d6,#003399);color:#fff;padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-bottom:3px solid #001f66}
+  header h1{font-size:22px;font-style:italic;font-weight:bold;margin:0 12px 0 0;letter-spacing:-0.5px;text-shadow:1px 1px 0 #001f66}
+  nav button{background:linear-gradient(#7aa9e0,#2a63b5);color:#fff;border:1px solid #001f66;border-radius:4px;padding:6px 10px;margin-right:4px;cursor:pointer;font-weight:bold}
+  nav button.on{background:#fff;color:var(--blue);border-color:#fff}
+  main{padding:12px}
+  section[hidden]{display:none}
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+  button,select,input{font:inherit}
+  button{padding:6px 10px;border:1px solid var(--line);background:#fff;border-radius:6px;cursor:pointer}
+  button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+  table.grid{border-collapse:collapse;width:100%;background:#fff}
+  table.grid th,table.grid td{border:1px solid var(--line);padding:4px;vertical-align:top}
+  table.grid th{background:#dbe9f7;color:#003399;text-align:left;white-space:nowrap}
+  table.grid td{min-width:120px}
+  .ev{border-radius:4px;padding:3px 5px;margin-bottom:4px;font-size:12px}
+  .ev.var{border:2px dashed #b45309}
+  .vtag{background:#b45309;color:#fff;border-radius:3px;padding:0 4px;font-size:10px}
+  .chip{display:inline-block;padding:3px 8px;border-radius:12px;margin:3px}
+  .warn{background:#fef2f2;border:1px solid #fca5a5;padding:8px;border-radius:6px;margin-bottom:10px}
+  .ok{background:#f0fdf4;border:1px solid #86efac;padding:8px;border-radius:6px;margin-bottom:10px}
+  form.card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-bottom:12px}
+  form.card label{display:flex;flex-direction:column;font-size:12px;gap:2px}
+  form.card button{align-self:end}
+  canvas{max-width:100%;height:auto;border:1px solid var(--line);background:#fff;cursor:crosshair}
+  .hint{color:#555;font-size:13px}
+  @media print{
+    @page{size:A3 landscape;margin:10mm}
+    header,.bar,#conflicts,form,#tab-assegnazioni,#tab-planimetrie,#tab-impostazioni{display:none!important}
+    main{padding:0}
+    #tab-settimana{display:block!important}
+    table.grid td{min-width:0}
+    .ev{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>MestSpace</h1>
+  <nav>
+    <button data-tab="settimana" class="on">Settimana</button>
+    <button data-tab="assegnazioni">Assegnazioni</button>
+    <button data-tab="planimetrie">Planimetrie</button>
+    <button data-tab="impostazioni">Impostazioni</button>
+  </nav>
+</header>
+
+<main>
+  <section id="tab-settimana">
+    <div class="bar">
+      <button id="prevW">◀</button>
+      <label>Settimana del <input type="date" id="weekPick"></label>
+      <button id="nextW">▶</button>
+      <select id="pianoSel">
+        <option value="terra">Piano terra</option>
+        <option value="primo">Primo piano</option>
+      </select>
+      <button class="primary" onclick="window.print()">Stampa / PDF</button>
+    </div>
+    <div id="conflicts"></div>
+    <div id="grid"></div>
+    <div id="legend"></div>
+  </section>
+
+  <section id="tab-assegnazioni" hidden>
+    <form id="formAss" class="card">
+      <label>Tipo
+        <select name="tipo"><option value="classe">Classe</option><option value="attivita">Attività</option></select>
+      </label>
+      <label>Aula <select name="roomId" id="fRoom"></select></label>
+      <label>Giorno
+        <select name="giorno">
+          <option value="1">Lunedì</option><option value="2">Martedì</option><option value="3">Mercoledì</option>
+          <option value="4">Giovedì</option><option value="5">Venerdì</option><option value="6">Sabato</option>
+        </select>
+      </label>
+      <label>Dalle <input type="time" name="dalle" required></label>
+      <label>Alle <input type="time" name="alle" required></label>
+      <label>Classe / attività <input name="etichetta" placeholder="es. 1C o Corso KET" required></label>
+      <label>Docente <input name="docente" placeholder="facoltativo"></label>
+      <label>Note <input name="note" placeholder="facoltativo"></label>
+      <label><span><input type="checkbox" name="variazione"> Variazione</span></label>
+      <label>Dal <input type="date" name="dal"></label>
+      <label>Al <input type="date" name="al"></label>
+      <button class="primary" type="submit">Aggiungi</button>
+    </form>
+    <div id="listAss"></div>
+  </section>
+
+  <section id="tab-planimetrie" hidden>
+    <div class="bar">
+      <select id="planPiano">
+        <option value="terra">Piano terra</option>
+        <option value="primo">Primo piano</option>
+      </select>
+      <input type="file" id="planFile" accept="image/*">
+      <button id="rotBtn">Ruota 90°</button>
+      <select id="mapRoom"></select>
+      <button id="remPt">Rimuovi punto</button>
+      <label><input type="checkbox" id="showLabels" checked> Etichette</label>
+      <button id="pngBtn">Scarica PNG</button>
+      <button id="printPlan">Stampa</button>
+    </div>
+    <p class="hint">Scegli l'aula, poi clicca sul disegno nel punto in cui va l'etichetta. Le etichette seguono la settimana selezionata nel tab Settimana.</p>
+    <canvas id="planCanvas"></canvas>
+  </section>
+
+  <section id="tab-impostazioni" hidden>
+    <div class="bar">
+      <label>Classi a settimana corta (separate da virgola)
+        <input id="corta" size="30">
+      </label>
+      <button id="saveCorta">Salva</button>
+    </div>
+    <div class="bar">
+      <button id="exportBtn">Esporta backup (JSON)</button>
+      <label>Importa backup <input type="file" id="importFile" accept="application/json"></label>
+      <button id="resetBtn">Azzera dati</button>
+    </div>
+    <p class="hint">I dati restano su questo dispositivo. Esporta un backup periodicamente.</p>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
