@@ -1,10 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
   <rect x="2" y="2" width="92" height="92" rx="20" fill="#EDF2E7" stroke="#CFDCC8" stroke-width="3"/>
-  <circle cx="48" cy="48" r="32" fill="#F8FBF4" stroke="#1F3027" stroke-width="5"/>
-  <path d="M48 19v9M48 68v9M19 48h9M68 48h9" stroke="#1F3027" stroke-width="4" stroke-linecap="round"/>
-  <g transform="rotate(45 48 48)">
-    <path d="M48 23 L58 48 H38 Z" fill="#5FAE72"/>
-    <path d="M48 73 L58 48 H38 Z" fill="#1F5C3A"/>
-  </g>
-  <circle cx="48" cy="48" r="4.5" fill="#1F3027"/>
+  <rect x="18" y="18" width="60" height="60" rx="5" fill="#F8FBF4" stroke="#1F3027" stroke-width="5"/>
+  <path d="M18 46h20M58 46h20M40 46v32M40 64h38M62 46v18" stroke="#1F3027" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <rect x="23" y="23" width="14" height="19" fill="#5FAE72" opacity=".9"/>
+  <rect x="44" y="23" width="29" height="19" fill="#BFDDC6"/>
+  <rect x="45" y="50" width="13" height="10" fill="#2E7D4F" opacity=".9"/>
 </svg>

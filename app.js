@@ -463,12 +463,35 @@ async function pdfToPng(file, pageNum) {
   await page.render({ canvasContext: cx, viewport: vp }).promise;
   return new Promise(r => c.toBlob(r, 'image/png'));
 }
+// SVG → PNG ad alta risoluzione (gestisce anche SVG senza width/height, solo viewBox)
+async function svgToPng(file) {
+  let t = await file.text();
+  const m = t.match(/<svg\b[^>]*>/i);
+  if (!m) throw new Error('file SVG non valido');
+  let tag = m[0];
+  const vb = tag.match(/viewBox\s*=\s*["']\s*([-\d.eE]+)[ ,]+([-\d.eE]+)[ ,]+([-\d.eE.]+)[ ,]+([-\d.eE.]+)/);
+  const num = n => { const x = tag.match(new RegExp('\\s' + n + '\\s*=\\s*["\']([\\d.]+)')); return x ? parseFloat(x[1]) : 0; };
+  let w = num('width'), h = num('height');
+  if (vb) { const vw = parseFloat(vb[3]), vh = parseFloat(vb[4]); if (!w || !h) { w = vw; h = vh; } }
+  if (!w || !h) throw new Error('SVG senza dimensioni (manca viewBox)');
+  const k = 2400 / Math.max(w, h);
+  const W = Math.round(w * k), H = Math.round(h * k);
+  const newTag = tag.replace(/\s(width|height)\s*=\s*["'][^"']*["']/gi, '').replace(/<svg/i, `<svg width="${W}" height="${H}"` + (vb || !w ? '' : ` viewBox="0 0 ${w} ${h}"`));
+  t = t.replace(tag, newTag);
+  const url = URL.createObjectURL(new Blob([t], { type: 'image/svg+xml' }));
+  const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('SVG non leggibile')); i.src = url; });
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const cx = c.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, W, H); cx.drawImage(im, 0, 0, W, H);
+  URL.revokeObjectURL(url);
+  return new Promise(r => c.toBlob(r, 'image/png'));
+}
 $('#planFile').addEventListener('change', async e => {
   const f = e.target.files[0];
   if (!f) return;
   try {
     const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
-    const blob = isPdf ? await pdfToPng(f, +$('#pdfPage').value || 1) : f;
+    const isSvg = f.type === 'image/svg+xml' || /\.svg$/i.test(f.name);
+    const blob = isPdf ? await pdfToPng(f, +$('#pdfPage').value || 1) : isSvg ? await svgToPng(f) : f;
     await idbPut('plan-' + $('#planPiano').value, blob);
   } catch (err) {
     alert('Impossibile caricare il file: ' + err.message);
