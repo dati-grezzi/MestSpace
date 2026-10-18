@@ -73,6 +73,7 @@
   #dayTabs button.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
   .report th{white-space:normal}
   .report td{vertical-align:top}
+  .report td.cap{color:#C62828;font-weight:700;text-align:center}
   #reportHead h2{margin:0 0 4px;font-family:'Zilla Slab',Georgia,serif;font-size:20px}
   @page report{size:A4 portrait;margin:12mm}
   body.big{font-size:17px}
@@ -211,6 +212,11 @@
       <button id="fisseBtn">Precompila assegnazioni fisse delle classi</button>
     </div>
     <p class="hint">Aggiunge le classi nelle aule indicate dalle planimetrie (3A, 3B, 3C, 3D, 2A-2D, 1A, 1B, 1D) e la 1C in aula 9. Le aule che hanno già un'assegnazione fissa non vengono toccate.</p>
+    <div class="bar">
+      <label>Importa elenco aule (CSV o Excel) <input type="file" id="roomsFile" accept=".csv,.xlsx,.xls,text/csv"></label>
+      <button id="roomsCsv">Esporta elenco aule (CSV)</button>
+    </div>
+    <p class="hint">Colonne: piano (terra/primo), numero, nome (etichetta), tipo, capienza, mq, note. Le aule esistenti vengono aggiornate (stesso piano e numero), le nuove aggiunte; nessuna viene eliminata.</p>
     <div class="bar">
       <button id="exportBtn">Esporta backup (JSON)</button>
       <label>Importa backup <input type="file" id="importFile" accept="application/json"></label>

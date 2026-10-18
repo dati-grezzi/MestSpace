@@ -66,13 +66,17 @@ const SEED = [
   ['primo', 26, 'Lab informatica', 'laboratorio', ''],
   ['primo', 27, 'Lab informatica', 'laboratorio', '']
 ];
+// Capienza scolastica (Ce, cifre in rosso) e superficie in mq dalla tavola "Capienze aule" 2022/23
+const CAP = {1:[50,91.18],2:[40,73.36],3:[44,81.82],4:[37,68.03],5:[25,46.30],6:[25,46.71],7:[25,46.78],8:[25,46.65],9:[25,46.71],10:[25,46.16],
+  11:[25,46.58],12:[25,46.51],13:[25,46.23],14:[25,47.67],15:[25,46.55],16:[25,47.67],17:[50,91.18],18:[33,61.22],19:[40,73.36],20:[44,81.82],21:[37,68.03],
+  22:[25,46.71],23:[25,46.85],24:[25,47.20],25:[25,46.50],26:[25,46.78],27:[25,46.92]};
 const roomKey = (piano, num, nome) => piano + '-' + (num ?? nome.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
 
 /* ---------- stato e persistenza ---------- */
 function fresh() {
   return {
     v: 1,
-    rooms: SEED.map(([piano, numero, nome, tipo, note]) => ({ id: roomKey(piano, numero, nome), piano, numero, nome, tipo, note })),
+    rooms: SEED.map(([piano, numero, nome, tipo, note]) => ({ id: roomKey(piano, numero, nome), piano, numero, nome, tipo, note, cap: CAP[numero]?.[0] ?? null, mq: CAP[numero]?.[1] ?? null })),
     std: [],          // assegnazioni standard (settimana tipo)
     var: [],          // variazioni con periodo dal/al
     perm: [],         // assegnazioni fisse (permanenti), senza giorno né orario
@@ -83,7 +87,11 @@ function fresh() {
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(STORE));
-    if (s && s.v) { s.perm = s.perm || []; return s; }
+    if (s && s.v) {
+      s.perm = s.perm || [];
+      s.rooms.forEach(r => { if (r.cap === undefined && CAP[r.numero]) { r.cap = CAP[r.numero][0]; r.mq = CAP[r.numero][1]; } });
+      return s;
+    }
     return fresh();
   } catch (e) { return fresh(); }
 }
@@ -609,7 +617,7 @@ function renderReport() {
     const rs = rows.filter(x => x.room.piano === piano);
     if (!rs.length) return '';
     return `<h3>${piano === 'terra' ? 'Piano terra' : 'Primo piano'}</h3>` +
-      '<table class="grid report"><thead><tr><th>Aula</th><th>Tipo</th><th>Assegnazione fissa</th><th>Orario della settimana</th></tr></thead><tbody>' +
+      '<table class="grid report"><thead><tr><th>Aula</th><th>Tipo</th><th>Cap.</th><th>Assegnazione fissa</th><th>Orario della settimana</th></tr></thead><tbody>' +
       rs.map(x => {
         x.fisse.forEach(p => labels.add(p.etichetta));
         x.orari.forEach(i => labels.add(i.etichetta));
@@ -619,7 +627,7 @@ function renderReport() {
           (S.corta.includes(i.etichetta) ? ' <i>(corta)</i>' : '') +
           (i.src === 'var' ? ' <span class="vtag">var.</span>' : '') +
           (i.docente ? ` <small>${esc(i.docente)}</small>` : '') + '</div>').join('') || '—';
-        return `<tr><th>${esc(roomName(x.room.id))}</th><td>${esc(x.room.tipo)}</td><td>${fisse}</td><td>${orari}</td></tr>`;
+        return `<tr><th>${esc(roomName(x.room.id))}</th><td>${esc(x.room.tipo)}</td><td class="cap">${x.room.cap ?? ''}</td><td>${fisse}</td><td>${orari}</td></tr>`;
       }).join('') + '</tbody></table>';
   };
   $('#reportHead').innerHTML =
@@ -627,7 +635,7 @@ function renderReport() {
     `<p>Settimana dal ${fmt(mon)} al ${fmt(addDays(mon, 5))}. Per cambiare settimana usa il tab Settimana.</p>`;
   const body = section('terra') + section('primo');
   $('#reportBody').innerHTML = body
-    ? body + '<h3>Legenda</h3>' + [...labels].sort().map(chip).join('') + '<p class="hint">Bordo tratteggiato / “var.” = variazione. “(corta)” = settimana corta.</p>'
+    ? body + '<h3>Legenda</h3>' + [...labels].sort().map(chip).join('') + '<p class="hint">Cap. = capienza scolastica (Ce, tavola Capienze aule 2022/23). Bordo tratteggiato / “var.” = variazione. “(corta)” = settimana corta.</p>'
     : '<p>Nessuna assegnazione da mostrare.</p>';
 }
 $('#repPiano').addEventListener('change', renderReport);
@@ -641,9 +649,9 @@ window.addEventListener('afterprint', () => document.body.classList.remove('prin
 $('#repCsv').addEventListener('click', () => {
   const { mon, rows } = reportData();
   const q = s => `"${String(s ?? '').replace(/"/g, '""')}"`;
-  const out = [['piano', 'numero', 'locale', 'tipo', 'assegnazione', 'giorno', 'dalle', 'alle', 'etichetta', 'docente', 'variazione']];
+  const out = [['piano', 'numero', 'locale', 'tipo', 'capienza', 'assegnazione', 'giorno', 'dalle', 'alle', 'etichetta', 'docente', 'variazione']];
   rows.forEach(x => {
-    const base = [x.room.piano, x.room.numero ?? '', x.room.nome, x.room.tipo];
+    const base = [x.room.piano, x.room.numero ?? '', x.room.nome, x.room.tipo, x.room.cap ?? ''];
     x.fisse.forEach(p => out.push([...base, 'fissa', '', '', '', p.etichetta, p.docente || '', '']));
     x.orari.forEach(i => out.push([...base, 'oraria', DAYS[parseISO(i.date).getDay()], i.dalle, i.alle, i.etichetta, i.docente || '', i.src === 'var' ? 'sì' : '']));
   });
@@ -665,6 +673,77 @@ const applyUI = () => {
 };
 $('#fontBtn').addEventListener('click', () => { UI.big = !UI.big; saveUI(); applyUI(); });
 window.matchMedia('(max-width: 600px)').addEventListener('change', () => renderGrid());
+
+/* ---------- import/export elenco aule (CSV / Excel) ---------- */
+function parseCSV(text) {
+  text = text.replace(/^\uFEFF/, '');
+  const first = text.split(/\r?\n/)[0];
+  const sep = (first.match(/;/g) || []).length >= (first.match(/,/g) || []).length ? ';' : ',';
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+    else if (c === '"') q = true;
+    else if (c === sep) { row.push(cur); cur = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; }
+    else cur += c;
+  }
+  if (cur || row.length) { row.push(cur); rows.push(row); }
+  return rows.filter(r => r.some(x => String(x).trim()));
+}
+let xlsxLib;
+function loadXlsx() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  return xlsxLib || (xlsxLib = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = () => res(window.XLSX); s.onerror = () => { xlsxLib = null; rej(new Error('libreria Excel non raggiungibile (serve connessione)')); };
+    document.head.appendChild(s);
+  }));
+}
+const HDR = { piano: 'piano', numero: 'numero', n: 'numero', nome: 'nome', etichetta: 'nome', locale: 'nome', aula: 'nome', tipo: 'tipo',
+  capienza: 'cap', cap: 'cap', ce: 'cap', mq: 'mq', superficie: 'mq', note: 'note' };
+const normPiano = v => { v = String(v).toLowerCase(); return /prim|^1$/.test(v) ? 'primo' : /terr|^0$/.test(v) ? 'terra' : ''; };
+const numOrNull = v => { v = String(v ?? '').trim().replace(',', '.'); return v === '' || isNaN(+v) ? null : +v; };
+function importRooms(rows) {
+  const head = rows[0].map(h => HDR[String(h).trim().toLowerCase().replace(/[^a-z]/g, '')] || '');
+  if (!head.includes('piano') || !head.includes('nome')) throw new Error('servono almeno le colonne «piano» e «nome» (o «etichetta»)');
+  let add = 0, upd = 0;
+  for (const r of rows.slice(1)) {
+    const o = {}; head.forEach((k, i) => { if (k) o[k] = String(r[i] ?? '').trim(); });
+    const piano = normPiano(o.piano); if (!piano || !o.nome) continue;
+    const numero = numOrNull(o.numero);
+    const id = roomKey(piano, numero, o.nome);
+    const ex = room(id);
+    const data = { piano, numero, nome: o.nome, tipo: o.tipo || ex?.tipo || '', note: o.note ?? ex?.note ?? '',
+      cap: 'cap' in o ? numOrNull(o.cap) : ex?.cap ?? null, mq: 'mq' in o ? numOrNull(o.mq) : ex?.mq ?? null };
+    if (ex) { Object.assign(ex, data); upd++; } else { S.rooms.push({ id, ...data }); add++; }
+  }
+  S.rooms.sort((x, y) => (x.piano === y.piano ? 0 : x.piano === 'terra' ? -1 : 1) || (x.numero ?? 999) - (y.numero ?? 999));
+  save(); fillRoomSelects(); fillMapRooms(); renderAll();
+  return { add, upd };
+}
+$('#roomsFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    let rows;
+    if (/\.xlsx?$/i.test(f.name)) {
+      const X = await loadXlsx();
+      const wb = X.read(await f.arrayBuffer());
+      rows = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+    } else rows = parseCSV(await f.text());
+    const { add, upd } = importRooms(rows);
+    alert(`Aule importate: ${add} nuove, ${upd} aggiornate. Le assegnazioni non sono state toccate.`);
+  } catch (err) { alert('Importazione non riuscita: ' + err.message); }
+  e.target.value = '';
+});
+$('#roomsCsv').addEventListener('click', () => {
+  const q = s => `"${String(s ?? '').replace(/"/g, '""')}"`;
+  const out = [['piano', 'numero', 'nome', 'tipo', 'capienza', 'mq', 'note'], ...S.rooms.map(r => [r.piano, r.numero ?? '', r.nome, r.tipo, r.cap ?? '', r.mq ?? '', r.note || ''])];
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\uFEFF' + out.map(r => r.map(q).join(';')).join('\n')], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'aule.csv'; a.click();
+});
 
 /* ---------- avvio ---------- */
 function renderAll() {
