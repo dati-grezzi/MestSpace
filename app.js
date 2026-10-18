@@ -99,7 +99,9 @@ let S = load();
 let weekDate = iso(new Date());
 const save = () => localStorage.setItem(STORE, JSON.stringify(S));
 const room = id => S.rooms.find(r => r.id === id);
-const roomName = id => { const r = room(id); if (!r) return '?'; return (r.numero != null ? r.numero + ' · ' : '') + r.nome; };
+const roomName = id => { const r = room(id); if (!r) return '?'; return r.nome + (r.numero != null ? ` (aula ${r.numero})` : ''); };
+const rNum = id => room(id)?.numero ?? '';
+const rNome = id => room(id)?.nome ?? '?';
 const permOf = id => S.perm.filter(p => p.roomId === id);
 const chip = l => `<span class="chip" style="background:${colorOf(l)}">${esc(l)}</span>`;
 const fixedTag = id => permOf(id).map(p => `<br><span class="fixed" style="background:${colorOf(p.etichetta)}">${esc(p.etichetta)}${p.docente ? ' · ' + esc(p.docente) : ''}</span>`).join('');
@@ -165,11 +167,11 @@ function renderGrid() {
   if (!rows.length) {
     $('#grid').innerHTML = '<p>Nessuna assegnazione per questo piano in questa settimana.</p>';
   } else {
-    let html = '<table class="grid"><thead><tr><th>Aula</th>' +
+    let html = '<table class="grid"><thead><tr><th class="rn">N.</th><th>Aula</th>' +
       dates.map((d, i) => { const dt = parseISO(d); return `<th>${dayNames[i]} ${dt.getDate()}/${dt.getMonth() + 1}</th>`; }).join('') +
       '</tr></thead><tbody>';
     for (const r of rows) {
-      html += `<tr><th>${esc(roomName(r.id))}${fixedTag(r.id)}</th>`;
+      html += `<tr><th class="rn">${esc(r.numero ?? '')}</th><th>${esc(r.nome)}${fixedTag(r.id)}</th>`;
       for (const d of dates) {
         const cell = items.filter(i => i.roomId === r.id && i.date === d).sort((a, b) => toMin(a.dalle) - toMin(b.dalle));
         html += '<td>' + cell.map(i =>
@@ -203,9 +205,9 @@ function renderAss() {
   const list = [...S.perm.map(a => ({ ...a, src: 'perm' })), ...S.std.map(a => ({ ...a, src: 'std' })), ...S.var.map(a => ({ ...a, src: 'var' }))]
     .sort((a, b) => (a.giorno || 0) - (b.giorno || 0) || toMin(a.dalle || '00:00') - toMin(b.dalle || '00:00'));
   $('#listAss').innerHTML = list.length
-    ? '<table class="grid"><thead><tr><th>Modalità</th><th>Giorno</th><th>Ora</th><th>Aula</th><th>Etichetta</th><th>Docente</th><th>Periodo</th><th></th></tr></thead><tbody>' +
+    ? '<table class="grid"><thead><tr><th>Modalità</th><th>Giorno</th><th>Ora</th><th>N.</th><th>Aula</th><th>Etichetta</th><th>Docente</th><th>Periodo</th><th></th></tr></thead><tbody>' +
       list.map(a => `<tr><td>${a.src === 'perm' ? 'Fissa' : a.src === 'var' ? 'Variazione' : 'Oraria'}</td><td>${a.src === 'perm' ? '—' : DAYS[a.giorno]}</td>` +
-        `<td>${a.src === 'perm' ? '—' : a.dalle + '–' + a.alle}</td><td>${esc(roomName(a.roomId))}</td><td>${esc(a.etichetta)}</td>` +
+        `<td>${a.src === 'perm' ? '—' : a.dalle + '–' + a.alle}</td><td>${esc(rNum(a.roomId))}</td><td>${esc(rNome(a.roomId))}</td><td>${esc(a.etichetta)}</td>` +
         `<td>${esc(a.docente || '')}</td><td>${a.src === 'var' ? esc(a.dal) + (a.al ? ' → ' + esc(a.al) : '') : ''}</td>` +
         `<td><button data-del="${a.src}:${a.id}">✕</button></td></tr>`).join('') +
       '</tbody></table>'
@@ -301,13 +303,12 @@ async function loadImg(piano) {
   return img;
 }
 
-// Etichetta: classe → nome della classe; laboratori/attività → "numero · nome o attività"
+// Etichetta sulla pianta: classe/attività assegnata, altrimenti nome del locale (senza numero)
 function labelFor(r, mon) {
   const its = weekItems(mon).filter(i => i.roomId === r.id)
     .sort((a, b) => a.date.localeCompare(b.date) || toMin(a.dalle) - toMin(b.dalle));
   const txt = [...new Set([...permOf(r.id).map(p => p.etichetta), ...its.map(i => i.etichetta)])].join(' / ');
-  if (r.tipo === 'classe') return txt || String(r.numero ?? r.nome);
-  return (r.numero != null ? r.numero + ' · ' : '') + (txt || r.nome);
+  return txt || r.nome;   // il numero è già sulla planimetria: etichetta = solo nome/classe/attività
 }
 let labelBoxes = [];   // rettangoli delle etichette disegnate, per trascinarle
 function drawLabel(text, x, y, rid) {
@@ -617,7 +618,7 @@ function renderReport() {
     const rs = rows.filter(x => x.room.piano === piano);
     if (!rs.length) return '';
     return `<h3>${piano === 'terra' ? 'Piano terra' : 'Primo piano'}</h3>` +
-      '<table class="grid report"><thead><tr><th>Aula</th><th>Tipo</th><th>Cap.</th><th>Assegnazione fissa</th><th>Orario della settimana</th></tr></thead><tbody>' +
+      '<table class="grid report"><thead><tr><th class="rn">N.</th><th>Aula</th><th>Tipo</th><th>Cap.</th><th>Assegnazione fissa</th><th>Orario della settimana</th></tr></thead><tbody>' +
       rs.map(x => {
         x.fisse.forEach(p => labels.add(p.etichetta));
         x.orari.forEach(i => labels.add(i.etichetta));
@@ -627,7 +628,7 @@ function renderReport() {
           (S.corta.includes(i.etichetta) ? ' <i>(corta)</i>' : '') +
           (i.src === 'var' ? ' <span class="vtag">var.</span>' : '') +
           (i.docente ? ` <small>${esc(i.docente)}</small>` : '') + '</div>').join('') || '—';
-        return `<tr><th>${esc(roomName(x.room.id))}</th><td>${esc(x.room.tipo)}</td><td class="cap">${x.room.cap ?? ''}</td><td>${fisse}</td><td>${orari}</td></tr>`;
+        return `<tr><th class="rn">${esc(x.room.numero ?? '')}</th><th>${esc(x.room.nome)}</th><td>${esc(x.room.tipo)}</td><td class="cap">${x.room.cap ?? ''}</td><td>${fisse}</td><td>${orari}</td></tr>`;
       }).join('') + '</tbody></table>';
   };
   $('#reportHead').innerHTML =

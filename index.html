@@ -51,6 +51,7 @@
   table.grid thead th{background:var(--ink);color:var(--paper);text-align:left;white-space:nowrap;font-family:'Zilla Slab',Georgia,serif}
   table.grid tbody th{background:var(--tint-warm);color:var(--ink);text-align:left;white-space:nowrap;border-left:3px solid rgba(76,154,99,.55)}
   table.grid td{min-width:120px}
+  table.grid th.rn{text-align:center;width:2.5em;padding-left:4px;padding-right:4px}
   .ev{border-radius:7px;padding:4px 6px;margin-bottom:4px;font-size:12px;color:var(--ink)}
   .ev.var{outline:1.5px dashed var(--amber);outline-offset:-2px}
   .vtag{background:var(--amber);color:#fff;border-radius:4px;padding:0 5px;font-size:10px;font-weight:700}
@@ -92,7 +93,8 @@
     main{padding:10px}
     .bar{gap:6px}
     #grid table.grid td{min-width:0}
-    #grid table.grid tbody th{white-space:normal;width:42%}
+    #grid table.grid tbody th{white-space:normal;width:38%}
+  #grid table.grid tbody th.rn{width:2.5em;white-space:nowrap}
   }
   @media print{
     @page{size:A3 landscape;margin:10mm}
