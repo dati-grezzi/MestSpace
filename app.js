@@ -304,7 +304,7 @@ function labelFor(r, mon) {
 let labelBoxes = [];   // rettangoli delle etichette disegnate, per trascinarle
 function drawLabel(text, x, y, rid) {
   // la dimensione segue la larghezza del disegno, così resta leggibile anche su immagini grandi
-  const fs = Math.max(14, Math.round(canvas.width / 55));
+  const fs = Math.max(8, Math.round(Math.max(14, canvas.width / 55) * (S.labelScale || 1)));
   const h = fs * 1.6;
   ctx.font = `bold ${fs}px sans-serif`;
   const w = ctx.measureText(text).width + fs * 0.8;
@@ -416,6 +416,11 @@ $('#moveMode').addEventListener('change', () => {
   // con "Sposta etichette" attivo il tocco sul disegno non fa scorrere la pagina
   canvas.style.touchAction = $('#moveMode').checked ? 'none' : 'auto';
 });
+$('#labelSize').value = S.labelScale || 1;
+$('#labelSize').addEventListener('input', () => {
+  S.labelScale = parseFloat($('#labelSize').value);
+  save(); drawPlan();
+});
 $('#clearPts').addEventListener('click', () => {
   const piano = $('#planPiano').value;
   const n = Object.keys(S.plans[piano].points).length;
@@ -526,12 +531,12 @@ $('#importFile').addEventListener('change', async e => {
     const obj = JSON.parse(await f.text());
     if (!obj.rooms || !obj.std || !obj.var) throw new Error('formato');
     obj.perm = obj.perm || [];
-    S = obj; save(); fillRoomSelects(); fillMapRooms(); $('#corta').value = S.corta.join(', '); renderAll();
+    S = obj; save(); $('#labelSize').value = S.labelScale || 1; fillRoomSelects(); fillMapRooms(); $('#corta').value = S.corta.join(', '); renderAll();
   } catch (err) { alert('Backup non valido.'); }
 });
 $('#resetBtn').addEventListener('click', () => {
   if (!confirm('Cancellare tutte le assegnazioni e le posizioni sulle planimetrie?')) return;
-  S = fresh(); save(); fillRoomSelects(); fillMapRooms(); $('#corta').value = S.corta.join(', '); renderAll();
+  S = fresh(); save(); $('#labelSize').value = 1; fillRoomSelects(); fillMapRooms(); $('#corta').value = S.corta.join(', '); renderAll();
 });
 
 /* ---------- navigazione tab ---------- */
