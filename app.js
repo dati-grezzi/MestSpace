@@ -198,7 +198,7 @@ function renderGrid() {
 
 /* ---------- tab Assegnazioni ---------- */
 function fillRoomSelects() {
-  const opts = S.rooms.map(r => `<option value="${r.id}">${esc(roomName(r.id))} (${r.piano})</option>`).join('');
+  const opts = S.rooms.map(r => `<option value="${r.id}">${esc(r.numero != null ? r.numero + ' – ' + r.nome : r.nome + ' (' + r.piano + ')')}</option>`).join('');
   $('#fRoom').innerHTML = opts;
 }
 function renderAss() {
@@ -311,7 +311,7 @@ function labelFor(r, mon) {
   return txt || r.nome;   // il numero è già sulla planimetria: etichetta = solo nome/classe/attività
 }
 let labelBoxes = [];   // rettangoli delle etichette disegnate, per trascinarle
-function drawLabel(text, x, y, rid) {
+function drawLabel(text, x, y, rid, isNum) {
   // la dimensione segue la larghezza del disegno, così resta leggibile anche su immagini grandi
   const fs = Math.max(8, Math.round(Math.max(14, canvas.width / 55) * (S.labelScale || 1)));
   const h = fs * 1.6;
@@ -319,9 +319,15 @@ function drawLabel(text, x, y, rid) {
   const w = ctx.measureText(text).width + fs * 0.8;
   const cy = y - h / 2 - 4;
   labelBoxes.push({ rid, x: x - w / 2, y: cy - h / 2, w, h });
-  ctx.fillStyle = 'rgba(255,255,255,.88)';
   ctx.strokeStyle = '#1F3027';
   ctx.lineWidth = Math.max(1, fs / 12);
+  if (isNum) {   // numero aula: pallino scuro con cifra chiara
+    ctx.fillStyle = '#1F3027';
+    ctx.beginPath(); ctx.roundRect(x - w / 2, cy - h / 2, w, h, h / 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, cy);
+    return;
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.88)';
   ctx.fillRect(x - w / 2, cy - h / 2, w, h);
   ctx.strokeRect(x - w / 2, cy - h / 2, w, h);
   ctx.fillStyle = '#111';
@@ -357,19 +363,25 @@ async function drawPlan() {
   const mon = mondayOf(weekDate);
   const showLabels = $('#showLabels').checked;
   labelBoxes = [];
-  for (const [rid, pt] of Object.entries(p.points)) {
-    const r = room(rid);
+  const showNums = $('#showNums').checked;
+  for (const [key, pt] of Object.entries(p.points)) {
+    const isNum = key.startsWith('n:');
+    const r = room(isNum ? key.slice(2) : key);
     if (!r) continue;
     const x = pt.x * W, y = pt.y * H;
+    if (isNum) { if (showNums && r.numero != null) drawLabel(String(r.numero), x, y + 4, key, true); continue; }
     ctx.fillStyle = '#2E7D4F';
     ctx.beginPath(); ctx.arc(x, y, Math.max(3, W / 400), 0, Math.PI * 2); ctx.fill();
-    if (showLabels) drawLabel(labelFor(r, mon), x, y, rid);
+    if (showLabels) drawLabel(labelFor(r, mon), x, y, key);
   }
 }
 function fillMapRooms() {
   const piano = $('#planPiano').value;
-  $('#mapRoom').innerHTML = S.rooms.filter(r => r.piano === piano)
-    .map(r => `<option value="${r.id}">${esc(roomName(r.id))}</option>`).join('');
+  const rs = S.rooms.filter(r => r.piano === piano);
+  // prima i numeri delle aule (1–27), poi le etichette di assegnazione: sono elementi indipendenti sulla pianta
+  $('#mapRoom').innerHTML =
+    '<optgroup label="Numeri aula">' + rs.filter(r => r.numero != null).map(r => `<option value="n:${r.id}">N° ${r.numero}</option>`).join('') + '</optgroup>' +
+    '<optgroup label="Etichette (assegnazioni)">' + rs.map(r => `<option value="${r.id}">${esc(r.numero != null ? r.numero + ' – ' + r.nome : r.nome)}</option>`).join('') + '</optgroup>';
 }
 /* posizionare e trascinare le etichette */
 let drag = null;
@@ -522,6 +534,7 @@ $('#remPt').addEventListener('click', () => {
   save(); drawPlan();
 });
 $('#showLabels').addEventListener('change', drawPlan);
+$('#showNums').addEventListener('change', drawPlan);
 $('#pngBtn').addEventListener('click', () => {
   canvas.toBlob(b => {
     const a = document.createElement('a');
@@ -718,15 +731,20 @@ const toGiorno = v => { v = String(v ?? '').trim().toLowerCase(); if (/^[1-6]$/.
    Colonna "assegnazione": "fissa" (senza giorno/orario) oppure "temporanea" (giorno, dalle, alle, e facoltativi dal/al). */
 function importRooms(rows) {
   const head = rows[0].map(h => HDR[String(h).trim().toLowerCase().replace(/[^a-z]/g, '')] || '');
-  if (!head.includes('piano') || !head.includes('nome')) throw new Error('servono almeno le colonne «piano» e «nome»');
+  if (!head.includes('numero') && !(head.includes('piano') && head.includes('nome'))) throw new Error('serve almeno la colonna «numero» (o «piano» e «nome»)');
   const hasAss = head.includes('assegnazione');
   let add = 0, upd = 0, nPerm = 0, nTemp = 0, skip = [];
   const perm = [], std = [], vr = [];
   rows.slice(1).forEach((r, idx) => {
     const o = {}; head.forEach((k, i) => { if (k) o[k] = String(r[i] ?? '').trim(); });
-    const piano = normPiano(o.piano); if (!piano || !o.nome) return;
+    let piano = normPiano(o.piano);
+    const nTmp = numOrNull(o.numero), known = nTmp != null ? S.rooms.find(x => x.numero === nTmp) : null;
+    if (known) { piano = piano || known.piano; o.nome = o.nome || known.nome; }
+    if (!piano || !o.nome) return;
     const numero = numOrNull(o.numero);
-    const id = roomKey(piano, numero, o.nome);
+    // il numero è la chiave: una riga con numero si abbina all'aula con quel numero, qualunque sia il nome
+    const byNum = numero != null ? S.rooms.find(x => x.numero === numero) : null;
+    const id = byNum ? byNum.id : roomKey(piano, numero, o.nome);
     let ex = room(id);
     const data = { piano, numero, nome: o.nome };
     ['tipo', 'note'].forEach(k => { if (o[k]) data[k] = o[k]; });
@@ -773,7 +791,7 @@ $('#roomsCsv').addEventListener('click', () => {
   const out = [['piano', 'numero', 'nome', 'tipo', 'capienza', 'mq', 'note', 'etichetta', 'assegnazione', 'giorno', 'dalle', 'alle', 'dal', 'al', 'docente']];
   // prima l'anagrafica delle aule, poi in coda le assegnazioni (una riga ciascuna)
   S.rooms.forEach(r => out.push([r.piano, r.numero ?? '', r.nome, r.tipo, r.cap ?? '', r.mq ?? '', r.note || '', '', '', '', '', '', '', '', '']));
-  const ass = (a, kind) => { const r = room(a.roomId); if (r) out.push([r.piano, r.numero ?? '', r.nome, '', '', '', '', a.etichetta,
+  const ass = (a, kind) => { const r = room(a.roomId); if (r) out.push([r.numero == null ? r.piano : '', r.numero ?? '', r.numero == null ? r.nome : '', '', '', '', '', a.etichetta,
     kind === 'perm' ? 'fissa' : 'temporanea', kind === 'perm' ? '' : DAYS[a.giorno], a.dalle || '', a.alle || '', a.dal || '', a.al || '', a.docente || '']); };
   S.perm.forEach(a => ass(a, 'perm')); S.std.forEach(a => ass(a, 'std')); S.var.forEach(a => ass(a, 'var'));
   const el = document.createElement('a');
