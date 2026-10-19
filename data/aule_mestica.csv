@@ -1,4 +1,4 @@
-﻿"piano";"numero";"nome";"tipo";"capienza";"mq";"note";"etichetta";"assegnazione";"giorno";"dalle";"alle";"dal";"al";"docente"
+﻿"piano";"numero";"etichetta";"tipo";"capienza";"mq";"note";"attivita";"assegnazione";"giorno";"dalle";"alle";"dal";"al";"docente"
 "terra";"1";"Biblioteca";"biblioteca";"50";"91.18";"";"";"";"";"";"";"";"";""
 "terra";"2";"Aula professori";"aula";"40";"73.36";"";"";"";"";"";"";"";"";""
 "terra";"3";"Aula 3A";"classe";"44";"81.82";"";"";"";"";"";"";"";"";""

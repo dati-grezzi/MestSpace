@@ -156,10 +156,8 @@
           <option value="fissa">Fissa (permanente, senza giorno e orario)</option>
         </select>
       </label>
-      <label>Tipo
-        <select name="tipo"><option value="classe">Classe</option><option value="attivita">Attività</option></select>
-      </label>
-      <label>Aula <select name="roomId" id="fRoom"></select></label>
+      <label>Numero aula <select name="roomId" id="fRoom"></select></label>
+      <label>Etichetta (locale) <input id="fRoomName" readonly tabindex="-1"></label>
       <label>Giorno
         <select name="giorno">
           <option value="1">Lunedì</option><option value="2">Martedì</option><option value="3">Mercoledì</option>
@@ -168,7 +166,7 @@
       </label>
       <label>Dalle <input type="time" name="dalle" required></label>
       <label>Alle <input type="time" name="alle" required></label>
-      <label>Classe / attività <input name="etichetta" placeholder="es. 1C o Corso KET" required></label>
+      <label>Attività <input name="etichetta" placeholder="es. 3A, Corso KET, Programmazione primari" required></label>
       <label>Docente <input name="docente" placeholder="facoltativo"></label>
       <label>Note <input name="note" placeholder="facoltativo"></label>
       <label>Dal <input type="date" name="dal"></label>
@@ -192,12 +190,13 @@
       <button id="clearPts">Elimina tutte</button>
       <label>Dimensione etichette <input type="range" id="labelSize" min="0.4" max="2" step="0.05" value="1"></label>
       <label><input type="checkbox" id="moveMode"> Sposta etichette</label>
-      <label><input type="checkbox" id="showLabels" checked> Etichette</label>
-      <label><input type="checkbox" id="showNums" checked> Numeri aula</label>
+      <label><input type="checkbox" id="showNums" checked> Numeri</label>
+      <label><input type="checkbox" id="showNames" checked> Etichette</label>
+      <label><input type="checkbox" id="showLabels" checked> Attività</label>
       <button id="pngBtn">Scarica PNG</button>
       <button id="printPlan">Stampa</button>
     </div>
-    <p class="hint">Scegli dall'elenco un numero aula (1–27) oppure un'etichetta di assegnazione, poi tocca il disegno nel punto in cui metterla: numeri ed etichette sono elementi indipendenti. Per spostarne una già posizionata trascinala: col mouse basta farlo, sul telefono attiva prima «Sposta etichette». Le etichette seguono la settimana selezionata nel tab Settimana.</p>
+    <p class="hint">Scegli dall'elenco un <b>numero</b> (1–27), l'<b>etichetta</b> del locale (es. Biblioteca) o le <b>attività</b> assegnate a un'aula, poi tocca il disegno nel punto in cui metterli: sono tre elementi indipendenti. Per spostarne una già posizionata trascinala: col mouse basta farlo, sul telefono attiva prima «Sposta etichette». Le attività seguono la settimana selezionata nel tab Settimana.</p>
     <canvas id="planCanvas"></canvas>
   </section>
 
@@ -219,7 +218,7 @@
       <label>Importa foglio aule e assegnazioni (CSV o Excel) <input type="file" id="roomsFile" accept=".csv,.xlsx,.xls,text/csv"></label>
       <button id="roomsCsv">Esporta foglio (CSV)</button>
     </div>
-    <p class="hint">Il foglio è la sorgente. Una riga per aula (piano, numero, nome, tipo, capienza, mq, note) e, in coda, una riga per ogni assegnazione, <b>riferita al numero dell'aula</b> (1–27): <b>etichetta</b> + <b>assegnazione</b> = <b>fissa</b> (nessun giorno/orario) oppure <b>temporanea</b> (giorno, dalle, alle; facoltativi dal/al per un periodo). Se il foglio contiene la colonna «assegnazione», importandolo sostituisce tutte le assegnazioni dell'app; le aule vengono aggiornate o aggiunte, mai eliminate. «Esporta» scrive anche ciò che hai inserito da app, accodato.</p>
+    <p class="hint">Il foglio è la sorgente. Tre cose distinte: <b>numero</b> (1–27), <b>etichetta</b> (nome del locale, es. Biblioteca) e <b>attività</b> (cosa si svolge). Una riga per aula (piano, numero, etichetta, tipo, capienza, mq, note) e, in coda, una riga per ogni assegnazione, riferita al numero dell'aula: <b>attività</b> + <b>fissa</b> (nessun giorno/orario) oppure <b>temporanea</b> (giorno, dalle, alle; facoltativi dal/al per un periodo). Se il foglio contiene la colonna «assegnazione», importandolo sostituisce tutte le assegnazioni dell'app; le aule vengono aggiornate o aggiunte, mai eliminate. «Esporta» scrive anche ciò che hai inserito da app, accodato.</p>
     <div class="bar">
       <button id="exportBtn">Esporta backup (JSON)</button>
       <label>Importa backup <input type="file" id="importFile" accept="application/json"></label>

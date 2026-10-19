@@ -167,7 +167,7 @@ function renderGrid() {
   if (!rows.length) {
     $('#grid').innerHTML = '<p>Nessuna assegnazione per questo piano in questa settimana.</p>';
   } else {
-    let html = '<table class="grid"><thead><tr><th class="rn">N.</th><th>Aula</th>' +
+    let html = '<table class="grid"><thead><tr><th class="rn">N.</th><th>Etichetta</th>' +
       dates.map((d, i) => { const dt = parseISO(d); return `<th>${dayNames[i]} ${dt.getDate()}/${dt.getMonth() + 1}</th>`; }).join('') +
       '</tr></thead><tbody>';
     for (const r of rows) {
@@ -198,14 +198,16 @@ function renderGrid() {
 
 /* ---------- tab Assegnazioni ---------- */
 function fillRoomSelects() {
-  const opts = S.rooms.map(r => `<option value="${r.id}">${esc(r.numero != null ? r.numero + ' – ' + r.nome : r.nome + ' (' + r.piano + ')')}</option>`).join('');
+  const opts = S.rooms.map(r => `<option value="${r.id}">${esc(r.numero != null ? r.numero : r.nome + ' (' + r.piano + ')')}</option>`).join('');
   $('#fRoom').innerHTML = opts;
+  $('#fRoomName').value = rNome($('#fRoom').value);
 }
+$('#fRoom').addEventListener('change', () => { $('#fRoomName').value = rNome($('#fRoom').value); });
 function renderAss() {
   const list = [...S.perm.map(a => ({ ...a, src: 'perm' })), ...S.std.map(a => ({ ...a, src: 'std' })), ...S.var.map(a => ({ ...a, src: 'var' }))]
     .sort((a, b) => (a.giorno || 0) - (b.giorno || 0) || toMin(a.dalle || '00:00') - toMin(b.dalle || '00:00'));
   $('#listAss').innerHTML = list.length
-    ? '<table class="grid"><thead><tr><th>Modalità</th><th>Giorno</th><th>Ora</th><th>N.</th><th>Aula</th><th>Etichetta</th><th>Docente</th><th>Periodo</th><th></th></tr></thead><tbody>' +
+    ? '<table class="grid"><thead><tr><th>Modalità</th><th>Giorno</th><th>Ora</th><th>N.</th><th>Etichetta</th><th>Attività</th><th>Docente</th><th>Periodo</th><th></th></tr></thead><tbody>' +
       list.map(a => `<tr><td>${a.src === 'perm' ? 'Fissa' : a.src === 'var' ? 'Variazione' : 'Oraria'}</td><td>${a.src === 'perm' ? '—' : DAYS[a.giorno]}</td>` +
         `<td>${a.src === 'perm' ? '—' : a.dalle + '–' + a.alle}</td><td>${esc(rNum(a.roomId))}</td><td>${esc(rNome(a.roomId))}</td><td>${esc(a.etichetta)}</td>` +
         `<td>${esc(a.docente || '')}</td><td>${a.src === 'var' ? esc(a.dal) + (a.al ? ' → ' + esc(a.al) : '') : ''}</td>` +
@@ -219,7 +221,7 @@ $('#formAss').addEventListener('submit', e => {
   const modo = f.modo.value;
   const a = {
     id: uid(), roomId: f.roomId.value,
-    etichetta: f.etichetta.value.trim(), tipo: f.tipo.value, docente: f.docente.value.trim(), note: f.note.value.trim()
+    etichetta: f.etichetta.value.trim(), tipo: room(f.roomId.value)?.tipo === 'classe' ? 'classe' : 'attivita', docente: f.docente.value.trim(), note: f.note.value.trim()
   };
   if (!a.roomId || !a.etichetta) { alert('Indica aula ed etichetta.'); return; }
   if (modo === 'fissa') {
@@ -308,7 +310,7 @@ function labelFor(r, mon) {
   const its = weekItems(mon).filter(i => i.roomId === r.id)
     .sort((a, b) => a.date.localeCompare(b.date) || toMin(a.dalle) - toMin(b.dalle));
   const txt = [...new Set([...permOf(r.id).map(p => p.etichetta), ...its.map(i => i.etichetta)])].join(' / ');
-  return txt || r.nome;   // il numero è già sulla planimetria: etichetta = solo nome/classe/attività
+  return txt;   // solo attività assegnate (numero ed etichetta del locale sono elementi separati)
 }
 let labelBoxes = [];   // rettangoli delle etichette disegnate, per trascinarle
 function drawLabel(text, x, y, rid, isNum) {
@@ -365,14 +367,15 @@ async function drawPlan() {
   labelBoxes = [];
   const showNums = $('#showNums').checked;
   for (const [key, pt] of Object.entries(p.points)) {
-    const isNum = key.startsWith('n:');
-    const r = room(isNum ? key.slice(2) : key);
+    const kind = key.startsWith('n:') ? 'n' : key.startsWith('e:') ? 'e' : 'a';
+    const r = room(kind === 'a' ? key : key.slice(2));
     if (!r) continue;
     const x = pt.x * W, y = pt.y * H;
-    if (isNum) { if (showNums && r.numero != null) drawLabel(String(r.numero), x, y + 4, key, true); continue; }
-    ctx.fillStyle = '#2E7D4F';
-    ctx.beginPath(); ctx.arc(x, y, Math.max(3, W / 400), 0, Math.PI * 2); ctx.fill();
-    if (showLabels) drawLabel(labelFor(r, mon), x, y, key);
+    if (kind === 'n') { if (showNums && r.numero != null) drawLabel(String(r.numero), x, y + 4, key, true); continue; }
+    if (kind === 'e') { if ($('#showNames').checked) drawLabel(r.nome, x, y, key); continue; }
+    if (!showLabels) continue;
+    const t = labelFor(r, mon); if (!t) continue;
+    drawLabel(t, x, y, key);
   }
 }
 function fillMapRooms() {
@@ -381,7 +384,8 @@ function fillMapRooms() {
   // prima i numeri delle aule (1–27), poi le etichette di assegnazione: sono elementi indipendenti sulla pianta
   $('#mapRoom').innerHTML =
     '<optgroup label="Numeri aula">' + rs.filter(r => r.numero != null).map(r => `<option value="n:${r.id}">N° ${r.numero}</option>`).join('') + '</optgroup>' +
-    '<optgroup label="Etichette (assegnazioni)">' + rs.map(r => `<option value="${r.id}">${esc(r.numero != null ? r.numero + ' – ' + r.nome : r.nome)}</option>`).join('') + '</optgroup>';
+    '<optgroup label="Etichette dei locali">' + rs.map(r => `<option value="e:${r.id}">${esc(r.nome)}${r.numero != null ? ' (aula ' + r.numero + ')' : ''}</option>`).join('') + '</optgroup>' +
+    '<optgroup label="Attività assegnate">' + rs.map(r => `<option value="${r.id}">${r.numero != null ? 'Aula ' + r.numero : esc(r.nome)}</option>`).join('') + '</optgroup>';
 }
 /* posizionare e trascinare le etichette */
 let drag = null;
@@ -535,6 +539,7 @@ $('#remPt').addEventListener('click', () => {
 });
 $('#showLabels').addEventListener('change', drawPlan);
 $('#showNums').addEventListener('change', drawPlan);
+$('#showNames').addEventListener('change', drawPlan);
 $('#pngBtn').addEventListener('click', () => {
   canvas.toBlob(b => {
     const a = document.createElement('a');
@@ -631,7 +636,7 @@ function renderReport() {
     const rs = rows.filter(x => x.room.piano === piano);
     if (!rs.length) return '';
     return `<h3>${piano === 'terra' ? 'Piano terra' : 'Primo piano'}</h3>` +
-      '<table class="grid report"><thead><tr><th class="rn">N.</th><th>Aula</th><th>Tipo</th><th>Cap.</th><th>Assegnazione fissa</th><th>Orario della settimana</th></tr></thead><tbody>' +
+      '<table class="grid report"><thead><tr><th class="rn">N.</th><th>Etichetta</th><th>Tipo</th><th>Cap.</th><th>Attività fissa</th><th>Attività della settimana</th></tr></thead><tbody>' +
       rs.map(x => {
         x.fisse.forEach(p => labels.add(p.etichetta));
         x.orari.forEach(i => labels.add(i.etichetta));
@@ -717,7 +722,7 @@ function loadXlsx() {
 }
 const HDR = { piano: 'piano', numero: 'numero', n: 'numero', nome: 'nome', locale: 'nome', aula: 'nome', tipo: 'tipo',
   capienza: 'cap', cap: 'cap', ce: 'cap', mq: 'mq', superficie: 'mq', note: 'note',
-  etichetta: 'etichetta', assegnazione: 'assegnazione', giorno: 'giorno', dalle: 'dalle', alle: 'alle', dal: 'dal', al: 'al', docente: 'docente' };
+  etichetta: 'nome', attivita: 'attivita', assegnazione: 'assegnazione', giorno: 'giorno', dalle: 'dalle', alle: 'alle', dal: 'dal', al: 'al', docente: 'docente' };
 const normPiano = v => { v = String(v).toLowerCase(); return /prim|^1$/.test(v) ? 'primo' : /terr|^0$/.test(v) ? 'terra' : ''; };
 const numOrNull = v => { v = String(v ?? '').trim().replace(',', '.'); return v === '' || isNaN(+v) ? null : +v; };
 // valori da Excel: orari come frazione di giorno, date come numero seriale
@@ -730,7 +735,7 @@ const toGiorno = v => { v = String(v ?? '').trim().toLowerCase(); if (/^[1-6]$/.
 /* Il foglio è la sorgente unica. Ogni riga = un'aula (attributi) e/o un'assegnazione.
    Colonna "assegnazione": "fissa" (senza giorno/orario) oppure "temporanea" (giorno, dalle, alle, e facoltativi dal/al). */
 function importRooms(rows) {
-  const head = rows[0].map(h => HDR[String(h).trim().toLowerCase().replace(/[^a-z]/g, '')] || '');
+  const head = rows[0].map(h => HDR[String(h).trim().toLowerCase().normalize('NFD').replace(/[^a-z]/g, '')] || '');
   if (!head.includes('numero') && !(head.includes('piano') && head.includes('nome'))) throw new Error('serve almeno la colonna «numero» (o «piano» e «nome»)');
   const hasAss = head.includes('assegnazione');
   let add = 0, upd = 0, nPerm = 0, nTemp = 0, skip = [];
@@ -749,11 +754,11 @@ function importRooms(rows) {
     const data = { piano, numero, nome: o.nome };
     ['tipo', 'note'].forEach(k => { if (o[k]) data[k] = o[k]; });
     ['cap', 'mq'].forEach(k => { if (o[k]) data[k] = numOrNull(o[k]); });
-    const soloAss = hasAss && o.etichetta;
+    const soloAss = hasAss && o.attivita;
     if (ex) { Object.assign(ex, data); if (!soloAss) upd++; } else { S.rooms.push({ id, tipo: '', note: '', cap: null, mq: null, ...data }); add++; }
-    if (!hasAss || !o.etichetta) return;
+    if (!hasAss || !o.attivita) return;
     const tipoAss = o.assegnazione.toLowerCase();
-    const base = { id: uid(), roomId: id, etichetta: o.etichetta, tipo: (room(id).tipo === 'classe') ? 'classe' : 'attivita', docente: o.docente || '', note: '' };
+    const base = { id: uid(), roomId: id, etichetta: o.attivita, tipo: (room(id).tipo === 'classe') ? 'classe' : 'attivita', docente: o.docente || '', note: '' };
     if (/^fiss/.test(tipoAss)) { perm.push(base); nPerm++; }
     else if (/^temp/.test(tipoAss)) {
       const g = toGiorno(o.giorno), d = toHHMM(o.dalle), al = toHHMM(o.alle);
@@ -788,7 +793,7 @@ $('#roomsFile').addEventListener('change', async e => {
 });
 $('#roomsCsv').addEventListener('click', () => {
   const q = s => `"${String(s ?? '').replace(/"/g, '""')}"`;
-  const out = [['piano', 'numero', 'nome', 'tipo', 'capienza', 'mq', 'note', 'etichetta', 'assegnazione', 'giorno', 'dalle', 'alle', 'dal', 'al', 'docente']];
+  const out = [['piano', 'numero', 'etichetta', 'tipo', 'capienza', 'mq', 'note', 'attivita', 'assegnazione', 'giorno', 'dalle', 'alle', 'dal', 'al', 'docente']];
   // prima l'anagrafica delle aule, poi in coda le assegnazioni (una riga ciascuna)
   S.rooms.forEach(r => out.push([r.piano, r.numero ?? '', r.nome, r.tipo, r.cap ?? '', r.mq ?? '', r.note || '', '', '', '', '', '', '', '', '']));
   const ass = (a, kind) => { const r = room(a.roomId); if (r) out.push([r.numero == null ? r.piano : '', r.numero ?? '', r.numero == null ? r.nome : '', '', '', '', '', a.etichetta,
