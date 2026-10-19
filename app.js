@@ -76,7 +76,7 @@ const roomKey = (piano, num, nome) => piano + '-' + (num ?? nome.toLowerCase().r
 function fresh() {
   return {
     v: 1,
-    rooms: SEED.map(([piano, numero, nome, tipo, note]) => ({ id: roomKey(piano, numero, nome), piano, numero, nome, tipo, note, cap: CAP[numero]?.[0] ?? null, mq: CAP[numero]?.[1] ?? null })),
+    rooms: SEED.map(([piano, numero, nome, tipo, note]) => ({ id: roomKey(piano, numero, nome), piano, numero, nome, tipo, note, etichetta: '', cap: CAP[numero]?.[0] ?? null, mq: CAP[numero]?.[1] ?? null })),
     std: [],          // assegnazioni standard (settimana tipo)
     var: [],          // variazioni con periodo dal/al
     perm: [],         // assegnazioni fisse (permanenti), senza giorno né orario
@@ -89,7 +89,7 @@ function load() {
     const s = JSON.parse(localStorage.getItem(STORE));
     if (s && s.v) {
       s.perm = s.perm || [];
-      s.rooms.forEach(r => { if (r.cap === undefined && CAP[r.numero]) { r.cap = CAP[r.numero][0]; r.mq = CAP[r.numero][1]; } });
+      s.rooms.forEach(r => { if (r.etichetta === undefined) r.etichetta = (s.perm.filter(p => p.roomId === r.id).map(p => p.etichetta).join(' / ')); if (r.cap === undefined && CAP[r.numero]) { r.cap = CAP[r.numero][0]; r.mq = CAP[r.numero][1]; } });
       return s;
     }
     return fresh();
@@ -100,6 +100,16 @@ let weekDate = iso(new Date());
 const save = () => localStorage.setItem(STORE, JSON.stringify(S));
 const room = id => S.rooms.find(r => r.id === id);
 const roomName = id => { const r = room(id); if (!r) return '?'; return r.nome + (r.numero != null ? ` (aula ${r.numero})` : ''); };
+// Etichetta di base dell'aula (dal foglio): più voci separate da " / ". Le assegnazioni fisse inserite da app vengono accodate.
+const tagsOf = r => String(r?.etichetta || '').split('/').map(s => s.trim()).filter(Boolean);
+function addTag(roomId, tag) {
+  const r = room(roomId); if (!r) return;
+  const t = tagsOf(r); if (!t.includes(tag)) { t.push(tag); r.etichetta = t.join(' / '); }
+}
+function dropTag(roomId, tag) {
+  const r = room(roomId); if (!r) return;
+  r.etichetta = tagsOf(r).filter(x => x !== tag).join(' / ');
+}
 const rNum = id => room(id)?.numero ?? '';
 const rNome = id => room(id)?.nome ?? '?';
 const permOf = id => S.perm.filter(p => p.roomId === id);
@@ -223,7 +233,7 @@ $('#formAss').addEventListener('submit', e => {
   };
   if (!a.roomId || !a.etichetta) { alert('Indica aula ed etichetta.'); return; }
   if (modo === 'fissa') {
-    S.perm.push(a);
+    S.perm.push(a); addTag(a.roomId, a.etichetta);
   } else {
     a.giorno = +f.giorno.value; a.dalle = f.dalle.value; a.alle = f.alle.value;
     if (!a.dalle || !a.alle || toMin(a.alle) <= toMin(a.dalle)) { alert('Controlla gli orari.'); return; }
@@ -244,7 +254,7 @@ $('#listAss').addEventListener('click', e => {
   if (!b || !confirm('Eliminare questa assegnazione?')) return;
   const [src, id] = b.dataset.del.split(':');
   if (src === 'var') S.var = S.var.filter(x => x.id !== id);
-  else if (src === 'perm') S.perm = S.perm.filter(x => x.id !== id);
+  else if (src === 'perm') { const p = S.perm.find(x => x.id === id); S.perm = S.perm.filter(x => x.id !== id); if (p && !S.perm.some(x => x.roomId === p.roomId && x.etichetta === p.etichetta)) dropTag(p.roomId, p.etichetta); }
   else S.std = S.std.filter(x => x.id !== id);
   save(); renderAll();
 });
@@ -307,7 +317,7 @@ async function loadImg(piano) {
 function labelFor(r, mon) {
   const its = weekItems(mon).filter(i => i.roomId === r.id)
     .sort((a, b) => a.date.localeCompare(b.date) || toMin(a.dalle) - toMin(b.dalle));
-  const txt = [...new Set([...permOf(r.id).map(p => p.etichetta), ...its.map(i => i.etichetta)])].join(' / ');
+  const txt = [...new Set([...tagsOf(r), ...permOf(r.id).map(p => p.etichetta), ...its.map(i => i.etichetta)])].join(' / ');
   return txt || r.nome;   // il numero è già sulla planimetria: etichetta = solo nome/classe/attività
 }
 let labelBoxes = [];   // rettangoli delle etichette disegnate, per trascinarle
@@ -590,7 +600,7 @@ $('#fisseBtn').addEventListener('click', () => {
   const nuove = FISSE.filter(([rid]) => room(rid) && !permOf(rid).length);
   if (!nuove.length) { alert('Queste aule hanno già un\'assegnazione fissa.'); return; }
   if (!confirm(`Aggiungere ${nuove.length} assegnazioni fisse (classi nelle aule indicate dalle planimetrie, 1C in aula 9)?`)) return;
-  nuove.forEach(([rid, c]) => S.perm.push({ id: uid(), roomId: rid, etichetta: c, tipo: 'classe', docente: '', note: 'da planimetria' }));
+  nuove.forEach(([rid, c]) => { S.perm.push({ id: uid(), roomId: rid, etichetta: c, tipo: 'classe', docente: '', note: 'da planimetria' }); addTag(rid, c); });
   save(); renderAll();
 });
 
@@ -702,7 +712,7 @@ function loadXlsx() {
     document.head.appendChild(s);
   }));
 }
-const HDR = { piano: 'piano', numero: 'numero', n: 'numero', nome: 'nome', etichetta: 'nome', locale: 'nome', aula: 'nome', tipo: 'tipo',
+const HDR = { piano: 'piano', numero: 'numero', n: 'numero', nome: 'nome', etichetta: 'etichetta', locale: 'nome', aula: 'nome', tipo: 'tipo',
   capienza: 'cap', cap: 'cap', ce: 'cap', mq: 'mq', superficie: 'mq', note: 'note' };
 const normPiano = v => { v = String(v).toLowerCase(); return /prim|^1$/.test(v) ? 'primo' : /terr|^0$/.test(v) ? 'terra' : ''; };
 const numOrNull = v => { v = String(v ?? '').trim().replace(',', '.'); return v === '' || isNaN(+v) ? null : +v; };
@@ -716,10 +726,15 @@ function importRooms(rows) {
     const numero = numOrNull(o.numero);
     const id = roomKey(piano, numero, o.nome);
     const ex = room(id);
-    const data = { piano, numero, nome: o.nome, tipo: o.tipo || ex?.tipo || '', note: o.note ?? ex?.note ?? '',
+    const data = { piano, numero, nome: o.nome, tipo: o.tipo || ex?.tipo || '', note: o.note ?? ex?.note ?? '', etichetta: 'etichetta' in o ? o.etichetta : ex?.etichetta ?? '',
       cap: 'cap' in o ? numOrNull(o.cap) : ex?.cap ?? null, mq: 'mq' in o ? numOrNull(o.mq) : ex?.mq ?? null };
     if (ex) { Object.assign(ex, data); upd++; } else { S.rooms.push({ id, ...data }); add++; }
   }
+  // il foglio è la sorgente: le etichette indicate diventano assegnazioni fisse (solo aggiunte)
+  S.rooms.forEach(r => tagsOf(r).forEach(t => {
+    if (!S.perm.some(p => p.roomId === r.id && p.etichetta === t))
+      S.perm.push({ id: uid(), roomId: r.id, etichetta: t, tipo: r.tipo === 'classe' ? 'classe' : 'attivita', docente: '', note: 'da foglio' });
+  }));
   S.rooms.sort((x, y) => (x.piano === y.piano ? 0 : x.piano === 'terra' ? -1 : 1) || (x.numero ?? 999) - (y.numero ?? 999));
   save(); fillRoomSelects(); fillMapRooms(); renderAll();
   return { add, upd };
@@ -740,7 +755,7 @@ $('#roomsFile').addEventListener('change', async e => {
 });
 $('#roomsCsv').addEventListener('click', () => {
   const q = s => `"${String(s ?? '').replace(/"/g, '""')}"`;
-  const out = [['piano', 'numero', 'nome', 'tipo', 'capienza', 'mq', 'note'], ...S.rooms.map(r => [r.piano, r.numero ?? '', r.nome, r.tipo, r.cap ?? '', r.mq ?? '', r.note || ''])];
+  const out = [['piano', 'numero', 'nome', 'etichetta', 'tipo', 'capienza', 'mq', 'note'], ...S.rooms.map(r => [r.piano, r.numero ?? '', r.nome, r.etichetta || '', r.tipo, r.cap ?? '', r.mq ?? '', r.note || ''])];
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['\uFEFF' + out.map(r => r.map(q).join(';')).join('\n')], { type: 'text/csv;charset=utf-8' }));
   a.download = 'aule.csv'; a.click();

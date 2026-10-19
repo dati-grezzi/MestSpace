@@ -218,7 +218,7 @@
       <label>Importa elenco aule (CSV o Excel) <input type="file" id="roomsFile" accept=".csv,.xlsx,.xls,text/csv"></label>
       <button id="roomsCsv">Esporta elenco aule (CSV)</button>
     </div>
-    <p class="hint">Colonne: piano (terra/primo), numero, nome (etichetta), tipo, capienza, mq, note. Le aule esistenti vengono aggiornate (stesso piano e numero), le nuove aggiunte; nessuna viene eliminata.</p>
+    <p class="hint">Colonne: piano (terra/primo), numero, nome, etichetta, tipo, capienza, mq, note. L'<b>etichetta</b> è il testo mostrato in pianta (es. 3A); più voci separate da « / ». Le assegnazioni fisse inserite da app vengono accodate all'etichetta: esporta l'elenco per riavere il foglio aggiornato. Le aule esistenti vengono aggiornate (stesso piano e numero), le nuove aggiunte; nessuna viene eliminata.</p>
     <div class="bar">
       <button id="exportBtn">Esporta backup (JSON)</button>
       <label>Importa backup <input type="file" id="importFile" accept="application/json"></label>
