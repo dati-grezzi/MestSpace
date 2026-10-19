@@ -215,10 +215,10 @@
     </div>
     <p class="hint">Aggiunge le classi nelle aule indicate dalle planimetrie (3A, 3B, 3C, 3D, 2A-2D, 1A, 1B, 1D) e la 1C in aula 9. Le aule che hanno già un'assegnazione fissa non vengono toccate.</p>
     <div class="bar">
-      <label>Importa elenco aule (CSV o Excel) <input type="file" id="roomsFile" accept=".csv,.xlsx,.xls,text/csv"></label>
-      <button id="roomsCsv">Esporta elenco aule (CSV)</button>
+      <label>Importa foglio aule e assegnazioni (CSV o Excel) <input type="file" id="roomsFile" accept=".csv,.xlsx,.xls,text/csv"></label>
+      <button id="roomsCsv">Esporta foglio (CSV)</button>
     </div>
-    <p class="hint">Colonne: piano (terra/primo), numero, nome, etichetta, tipo, capienza, mq, note. L'<b>etichetta</b> è il testo mostrato in pianta (es. 3A); più voci separate da « / ». Le assegnazioni fisse inserite da app vengono accodate all'etichetta: esporta l'elenco per riavere il foglio aggiornato. Le aule esistenti vengono aggiornate (stesso piano e numero), le nuove aggiunte; nessuna viene eliminata.</p>
+    <p class="hint">Il foglio è la sorgente. Una riga per aula (piano, numero, nome, tipo, capienza, mq, note) e, in coda, una riga per ogni assegnazione: <b>etichetta</b> + <b>assegnazione</b> = <b>fissa</b> (nessun giorno/orario) oppure <b>temporanea</b> (giorno, dalle, alle; facoltativi dal/al per un periodo). Se il foglio contiene la colonna «assegnazione», importandolo sostituisce tutte le assegnazioni dell'app; le aule vengono aggiornate o aggiunte, mai eliminate. «Esporta» scrive anche ciò che hai inserito da app, accodato.</p>
     <div class="bar">
       <button id="exportBtn">Esporta backup (JSON)</button>
       <label>Importa backup <input type="file" id="importFile" accept="application/json"></label>
