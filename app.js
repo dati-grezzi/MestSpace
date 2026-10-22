@@ -312,30 +312,48 @@ function labelFor(r, mon) {
   const txt = [...new Set([...permOf(r.id).map(p => p.etichetta), ...its.map(i => i.etichetta)])].join(' / ');
   return txt;   // solo attività assegnate (numero ed etichetta del locale sono elementi separati)
 }
-let labelBoxes = [];   // rettangoli delle etichette disegnate, per trascinarle
-function drawLabel(text, x, y, rid, isNum) {
+let labelBoxes = [];
+let exporting = false;   // rettangoli delle etichette disegnate, per trascinarle
+// gruppi (livelli) di etichette per piano: ciascuno con rotazione, dimensione e visibilità proprie
+function grpsOf(piano) {
+  const p = S.plans[piano];
+  if (!p.groups || !p.groups.length) p.groups = [{ id: 'g1', name: 'Gruppo 1', rot: 0, scale: S.labelScale || 1, vis: true }];
+  if (!p.groups.some(g => g.id === p.active)) p.active = p.groups[0].id;
+  return p.groups;
+}
+const groupOf = (p, pt) => p.groups.find(g => g.id === pt.g) || p.groups[0];
+let selKey = null;   // etichetta selezionata (ultima toccata o posizionata)
+function drawLabel(text, x, y, key, isNum, rot, scale, selected) {
   // la dimensione segue la larghezza del disegno, così resta leggibile anche su immagini grandi
-  const fs = Math.max(8, Math.round(Math.max(14, canvas.width / 55) * (S.labelScale || 1)));
+  const fs = Math.max(8, Math.round(Math.max(14, canvas.width / 55) * (scale || 1)));
   const h = fs * 1.6;
   ctx.font = `bold ${fs}px sans-serif`;
   const w = ctx.measureText(text).width + fs * 0.8;
-  const cy = y - h / 2 - 4;
-  labelBoxes.push({ rid, x: x - w / 2, y: cy - h / 2, w, h });
+  const bw = rot ? h : w, bh = rot ? w : h;                 // ingombro a schermo
+  const cx = x, cy = y - bh / 2 - 4;                        // centro: l'etichetta sta sopra il punto
+  labelBoxes.push({ rid: key, x: cx - bw / 2, y: cy - bh / 2, w: bw, h: bh });
+  ctx.save();
+  ctx.translate(cx, cy);
+  if (rot) ctx.rotate(-Math.PI / 2);
   ctx.strokeStyle = '#1F3027';
   ctx.lineWidth = Math.max(1, fs / 12);
   if (isNum) {   // numero aula: pallino scuro con cifra chiara
     ctx.fillStyle = '#1F3027';
-    ctx.beginPath(); ctx.roundRect(x - w / 2, cy - h / 2, w, h, h / 2); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, cy);
-    return;
+    ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, h / 2); ctx.fill();
+    ctx.fillStyle = '#fff';
+  } else {
+    ctx.fillStyle = 'rgba(255,255,255,.88)';
+    ctx.fillRect(-w / 2, -h / 2, w, h);
+    ctx.strokeRect(-w / 2, -h / 2, w, h);
+    ctx.fillStyle = '#111';
   }
-  ctx.fillStyle = 'rgba(255,255,255,.88)';
-  ctx.fillRect(x - w / 2, cy - h / 2, w, h);
-  ctx.strokeRect(x - w / 2, cy - h / 2, w, h);
-  ctx.fillStyle = '#111';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, x, cy);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, 0, 0);
+  if (selected) {
+    ctx.strokeStyle = '#C62828'; ctx.lineWidth = Math.max(2, fs / 8); ctx.setLineDash([fs / 3, fs / 4]);
+    ctx.strokeRect(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6);
+  }
+  ctx.restore();
 }
 async function drawPlan() {
   const piano = $('#planPiano').value;
@@ -366,16 +384,20 @@ async function drawPlan() {
   const showLabels = $('#showLabels').checked;
   labelBoxes = [];
   const showNums = $('#showNums').checked;
+  grpsOf(piano);
   for (const [key, pt] of Object.entries(p.points)) {
+    const g = groupOf(p, pt);
+    if (!g.vis) continue;
+    const rot = (pt.r ?? g.rot) ? 1 : 0, sel = key === selKey && !exporting;
     const kind = key.startsWith('n:') ? 'n' : key.startsWith('e:') ? 'e' : 'a';
     const r = room(kind === 'a' ? key : key.slice(2));
     if (!r) continue;
     const x = pt.x * W, y = pt.y * H;
-    if (kind === 'n') { if (showNums && r.numero != null) drawLabel(String(r.numero), x, y + 4, key, true); continue; }
-    if (kind === 'e') { if ($('#showNames').checked) drawLabel(r.nome, x, y, key); continue; }
+    if (kind === 'n') { if (showNums && r.numero != null) drawLabel(String(r.numero), x, y + 4, key, true, rot, g.scale, sel); continue; }
+    if (kind === 'e') { if ($('#showNames').checked) drawLabel(r.nome, x, y, key, false, rot, g.scale, sel); continue; }
     if (!showLabels) continue;
     const t = labelFor(r, mon); if (!t) continue;
-    drawLabel(t, x, y, key);
+    drawLabel(t, x, y, key, false, rot, g.scale, sel);
   }
 }
 function fillMapRooms() {
@@ -403,6 +425,7 @@ canvas.addEventListener('pointerdown', e => {
   const b = (move || e.pointerType === 'mouse') ? labelAt(p) : null;
   if (b) {
     const pt = S.plans[piano].points[b.rid];
+    selKey = b.rid; updateSel();
     drag = { rid: b.rid, piano, dx: p.x - pt.x * canvas.width, dy: p.y - pt.y * canvas.height, id: e.pointerId };
     canvas.setPointerCapture(e.pointerId);
     canvas.style.cursor = 'grabbing';
@@ -412,7 +435,9 @@ canvas.addEventListener('pointerdown', e => {
   if (move) return;   // in modalità sposta un tocco a vuoto non crea etichette
   const rid = $('#mapRoom').value;
   if (!rid) return;
-  S.plans[piano].points[rid] = { x: p.x / canvas.width, y: p.y / canvas.height };
+  grpsOf(piano);
+  S.plans[piano].points[rid] = { x: p.x / canvas.width, y: p.y / canvas.height, g: S.plans[piano].active };
+  selKey = rid; updateSel();
   save();
   drawPlan();
   $('#mapRoom').selectedIndex = Math.min($('#mapRoom').selectedIndex + 1, $('#mapRoom').options.length - 1);
@@ -426,7 +451,7 @@ canvas.addEventListener('pointermove', e => {
   if (e.pointerId !== drag.id) return;
   const x = Math.min(1, Math.max(0, (p.x - drag.dx) / canvas.width));
   const y = Math.min(1, Math.max(0, (p.y - drag.dy) / canvas.height));
-  S.plans[drag.piano].points[drag.rid] = { x, y };
+  Object.assign(S.plans[drag.piano].points[drag.rid], { x, y });
   drawPlan();
 });
 const endDrag = e => {
@@ -441,9 +466,64 @@ $('#moveMode').addEventListener('change', () => {
   // con "Sposta etichette" attivo il tocco sul disegno non fa scorrere la pagina
   canvas.style.touchAction = $('#moveMode').checked ? 'none' : 'auto';
 });
-$('#labelSize').value = S.labelScale || 1;
+const curPlan = () => S.plans[$('#planPiano').value];
+const curGroup = () => { const p = curPlan(); grpsOf($('#planPiano').value); return p.groups.find(g => g.id === p.active); };
+function updateSel() {
+  const p = curPlan(), pt = selKey && p.points[selKey];
+  if (!pt) { selKey = null; $('#selInfo').textContent = 'Nessuna etichetta selezionata.'; return; }
+  const k = selKey.startsWith('n:') ? 'numero' : selKey.startsWith('e:') ? 'etichetta' : 'attività';
+  const r = room(selKey.replace(/^[ne]:/, ''));
+  $('#selInfo').textContent = `Selezionata: ${k} ${r ? (r.numero ?? r.nome) : ''} · ${groupOf(p, pt).name}`;
+}
+function refreshGroups() {
+  const piano = $('#planPiano').value, p = S.plans[piano];
+  grpsOf(piano);
+  const n = id => Object.values(p.points).filter(pt => groupOf(p, pt).id === id).length;
+  $('#grpSel').innerHTML = p.groups.map(g => `<option value="${g.id}">${esc(g.name)} (${n(g.id)})${g.vis ? '' : ' – nascosto'}</option>`).join('');
+  $('#grpSel').value = p.active;
+  const g = curGroup();
+  $('#grpVis').checked = g.vis; $('#labelSize').value = g.scale;
+  updateSel();
+}
+$('#grpSel').addEventListener('change', () => { curPlan().active = $('#grpSel').value; save(); refreshGroups(); });
+$('#grpAdd').addEventListener('click', () => {
+  const p = curPlan(); grpsOf($('#planPiano').value);
+  const name = prompt('Nome del nuovo gruppo di etichette:', 'Gruppo ' + (p.groups.length + 1)); if (!name) return;
+  const g = { id: 'g' + uid(), name: name.trim(), rot: 0, scale: curGroup().scale, vis: true };
+  p.groups.push(g); p.active = g.id; save(); refreshGroups(); drawPlan();
+});
+$('#grpRen').addEventListener('click', () => {
+  const g = curGroup(), name = prompt('Nuovo nome del gruppo:', g.name); if (!name) return;
+  g.name = name.trim(); save(); refreshGroups();
+});
+$('#grpDel').addEventListener('click', () => {
+  const p = curPlan(), g = curGroup();
+  const ids = Object.keys(p.points).filter(k => groupOf(p, p.points[k]).id === g.id);
+  if (!confirm(`Eliminare il gruppo «${g.name}» e le sue ${ids.length} etichette?`)) return;
+  ids.forEach(k => delete p.points[k]);
+  if (p.groups.length > 1) p.groups = p.groups.filter(x => x.id !== g.id);
+  p.active = p.groups[0].id; selKey = null; save(); refreshGroups(); drawPlan();
+});
+$('#grpVis').addEventListener('change', () => { curGroup().vis = $('#grpVis').checked; save(); refreshGroups(); drawPlan(); });
+$('#grpRot').addEventListener('click', () => {
+  // ruota tutte le etichette del gruppo attivo (e azzera le rotazioni singole)
+  const p = curPlan(), g = curGroup(); g.rot = g.rot ? 0 : 90;
+  Object.values(p.points).forEach(pt => { if (groupOf(p, pt).id === g.id) delete pt.r; });
+  save(); drawPlan();
+});
+$('#lblRot').addEventListener('click', () => {
+  const p = curPlan(), pt = selKey && p.points[selKey];
+  if (!pt) { alert('Seleziona prima un\'etichetta: toccala (con «Sposta etichette» attivo) o cliccala.'); return; }
+  const cur = pt.r ?? groupOf(p, pt).rot; pt.r = cur ? 0 : 90;
+  save(); drawPlan();
+});
+$('#lblMove').addEventListener('click', () => {
+  const p = curPlan(), pt = selKey && p.points[selKey];
+  if (!pt) { alert('Seleziona prima un\'etichetta.'); return; }
+  pt.g = p.active; delete pt.r; save(); refreshGroups(); drawPlan();
+});
 $('#labelSize').addEventListener('input', () => {
-  S.labelScale = parseFloat($('#labelSize').value);
+  curGroup().scale = parseFloat($('#labelSize').value);
   save(); drawPlan();
 });
 $('#clearPts').addEventListener('click', () => {
@@ -451,11 +531,11 @@ $('#clearPts').addEventListener('click', () => {
   const n = Object.keys(S.plans[piano].points).length;
   if (!n) { alert('Non ci sono etichette posizionate su questo piano.'); return; }
   if (!confirm(`Eliminare tutte le ${n} etichette di questo piano? Le assegnazioni non vengono toccate.`)) return;
-  S.plans[piano].points = {};
-  save(); drawPlan();
+  S.plans[piano].points = {}; selKey = null;
+  save(); refreshGroups(); drawPlan();
 });
 $('#planPiano').addEventListener('change', () => {
-  img = null; fillMapRooms();
+  img = null; fillMapRooms(); selKey = null; refreshGroups();
   $('#pdfPage').value = $('#planPiano').value === 'primo' ? 2 : 1;
   drawPlan();
 });
@@ -534,23 +614,28 @@ $('#rotBtn').addEventListener('click', () => {
 });
 $('#remPt').addEventListener('click', () => {
   const piano = $('#planPiano').value;
-  delete S.plans[piano].points[$('#mapRoom').value];
-  save(); drawPlan();
+  delete S.plans[piano].points[selKey || $('#mapRoom').value];
+  selKey = null; save(); refreshGroups(); drawPlan();
 });
 $('#showLabels').addEventListener('change', drawPlan);
 $('#showNums').addEventListener('change', drawPlan);
 $('#showNames').addEventListener('change', drawPlan);
-$('#pngBtn').addEventListener('click', () => {
+$('#pngBtn').addEventListener('click', async () => {
+  exporting = true; await drawPlan();   // senza il contorno di selezione
   canvas.toBlob(b => {
+    exporting = false; drawPlan();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(b);
     a.download = `planimetria-${$('#planPiano').value}-${mondayOf(weekDate)}.png`;
     a.click();
   });
 });
-$('#printPlan').addEventListener('click', () => {
+$('#printPlan').addEventListener('click', async () => {
+  exporting = true; await drawPlan();
+  const url = canvas.toDataURL();
+  exporting = false; drawPlan();
   const w = window.open('');
-  w.document.write(`<img src="${canvas.toDataURL()}" style="width:100%">`);
+  w.document.write(`<img src="${url}" style="width:100%">`);
   w.document.close();
   w.onload = () => w.print();
 });
@@ -581,12 +666,12 @@ $('#importFile').addEventListener('change', async e => {
     const obj = JSON.parse(await f.text());
     if (!obj.rooms || !obj.std || !obj.var) throw new Error('formato');
     obj.perm = obj.perm || [];
-    S = obj; save(); $('#labelSize').value = S.labelScale || 1; fillRoomSelects(); fillMapRooms(); $('#corta').value = S.corta.join(', '); renderAll();
+    S = obj; save(); fillRoomSelects(); fillMapRooms(); refreshGroups(); $('#corta').value = S.corta.join(', '); renderAll();
   } catch (err) { alert('Backup non valido.'); }
 });
 $('#resetBtn').addEventListener('click', () => {
   if (!confirm('Cancellare tutte le assegnazioni e le posizioni sulle planimetrie?')) return;
-  S = fresh(); save(); $('#labelSize').value = 1; fillRoomSelects(); fillMapRooms(); $('#corta').value = S.corta.join(', '); renderAll();
+  S = fresh(); save(); fillRoomSelects(); fillMapRooms(); refreshGroups(); $('#corta').value = S.corta.join(', '); renderAll();
 });
 
 /* ---------- navigazione tab ---------- */
@@ -817,6 +902,7 @@ applyUI();
 updateModo();
 fillRoomSelects();
 fillMapRooms();
+refreshGroups();
 renderAll();
 $('#planPiano').value = 'terra';
 fillMapRooms();
