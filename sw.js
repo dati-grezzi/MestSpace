@@ -1,5 +1,5 @@
-const CACHE = 'mestspace-v3';
-const SHELL = ['./', './index.html', './app.js', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
+const CACHE = 'mestspace-v4';
+const SHELL = ['./', './index.html', './app.js?v=20261022', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -17,7 +17,7 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-store' })   // salta anche la cache HTTP del browser
       .then(res => {
         if (res && (res.ok || res.type === 'opaque')) {
           const copy = res.clone();

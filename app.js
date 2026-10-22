@@ -2,6 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
+const VERSION = '2026-10-22 · gruppi etichette + dialoghi';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -921,6 +922,7 @@ function renderAll() {
 }
 if (!localStorage.getItem(UI_KEY)) UI.day = Math.max(0, Math.min(5, new Date().getDay() - 1));
 applyUI();
+$('#ver').textContent = VERSION;
 updateModo();
 fillRoomSelects();
 fillMapRooms();
