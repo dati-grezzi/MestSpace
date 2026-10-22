@@ -15,6 +15,28 @@ const overlap = (a, b) => toMin(a.dalle) < toMin(b.alle) && toMin(b.dalle) < toM
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const colorOf = s => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 55% 84%)`; };
 
+/* ---------- finestre di dialogo interne (alert/confirm/prompt nativi non funzionano in anteprima e in alcuni browser) ---------- */
+function uiDialog(msg, { input, ok = 'OK', cancel } = {}) {
+  return new Promise(res => {
+    const ov = document.createElement('div'); ov.className = 'dlg-ov';
+    ov.innerHTML = `<div class="dlg" role="dialog" aria-modal="true"><p></p>${input !== undefined ? '<input type="text">' : ''}<div class="dlg-b">${cancel ? '<button data-c>' + cancel + '</button>' : ''}<button class="primary" data-ok>${ok}</button></div></div>`;
+    ov.querySelector('p').textContent = msg;
+    const inp = ov.querySelector('input'); if (inp) inp.value = input;
+    const done = v => { ov.remove(); document.removeEventListener('keydown', key, true); res(v); };
+    const key = e => { if (e.key === 'Escape') { e.stopPropagation(); done(inp ? null : cancel ? false : undefined); } else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); done(inp ? inp.value : true); } };
+    ov.addEventListener('click', e => {
+      if (e.target.closest('[data-ok]')) done(inp ? inp.value : true);
+      else if (e.target.closest('[data-c]') || e.target === ov) done(inp ? null : cancel ? false : undefined);
+    });
+    document.addEventListener('keydown', key, true);
+    document.body.appendChild(ov);
+    (inp || ov.querySelector('[data-ok]')).focus(); if (inp) inp.select();
+  });
+}
+const uiAlert = msg => uiDialog(msg);
+const uiConfirm = msg => uiDialog(msg, { ok: 'Conferma', cancel: 'Annulla' });
+const uiPrompt = (msg, def = '') => uiDialog(msg, { input: def, ok: 'OK', cancel: 'Annulla' });
+
 /* ---------- preferenze di visualizzazione (solo questo dispositivo) ---------- */
 const UI_KEY = 'mestspace-ui';
 let UI = { big: false, day: 0 };
@@ -215,7 +237,7 @@ function renderAss() {
       '</tbody></table>'
     : '<p>Nessuna assegnazione.</p>';
 }
-$('#formAss').addEventListener('submit', e => {
+$('#formAss').addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target;
   const modo = f.modo.value;
@@ -223,14 +245,14 @@ $('#formAss').addEventListener('submit', e => {
     id: uid(), roomId: f.roomId.value,
     etichetta: f.etichetta.value.trim(), tipo: room(f.roomId.value)?.tipo === 'classe' ? 'classe' : 'attivita', docente: f.docente.value.trim(), note: f.note.value.trim()
   };
-  if (!a.roomId || !a.etichetta) { alert('Indica aula ed etichetta.'); return; }
+  if (!a.roomId || !a.etichetta) { await uiAlert('Indica aula ed etichetta.'); return; }
   if (modo === 'fissa') {
     S.perm.push(a);
   } else {
     a.giorno = +f.giorno.value; a.dalle = f.dalle.value; a.alle = f.alle.value;
-    if (!a.dalle || !a.alle || toMin(a.alle) <= toMin(a.dalle)) { alert('Controlla gli orari.'); return; }
+    if (!a.dalle || !a.alle || toMin(a.alle) <= toMin(a.dalle)) { await uiAlert('Controlla gli orari.'); return; }
     if (modo === 'variazione') {
-      if (!f.dal.value) { alert('Indica la data di inizio della variazione.'); return; }
+      if (!f.dal.value) { await uiAlert('Indica la data di inizio della variazione.'); return; }
       a.dal = f.dal.value; a.al = f.al.value || null;
       S.var.push(a);
     } else {
@@ -241,9 +263,9 @@ $('#formAss').addEventListener('submit', e => {
   f.etichetta.value = ''; f.docente.value = ''; f.note.value = '';
   renderAll();
 });
-$('#listAss').addEventListener('click', e => {
+$('#listAss').addEventListener('click', async e => {
   const b = e.target.closest('[data-del]');
-  if (!b || !confirm('Eliminare questa assegnazione?')) return;
+  if (!b || !await uiConfirm('Eliminare questa assegnazione?')) return;
   const [src, id] = b.dataset.del.split(':');
   if (src === 'var') S.var = S.var.filter(x => x.id !== id);
   else if (src === 'perm') S.perm = S.perm.filter(x => x.id !== id);
@@ -486,20 +508,20 @@ function refreshGroups() {
   updateSel();
 }
 $('#grpSel').addEventListener('change', () => { curPlan().active = $('#grpSel').value; save(); refreshGroups(); });
-$('#grpAdd').addEventListener('click', () => {
+$('#grpAdd').addEventListener('click', async () => {
   const p = curPlan(); grpsOf($('#planPiano').value);
-  const name = prompt('Nome del nuovo gruppo di etichette:', 'Gruppo ' + (p.groups.length + 1)); if (!name) return;
+  const name = await uiPrompt('Nome del nuovo gruppo di etichette:', 'Gruppo ' + (p.groups.length + 1)); if (!name) return;
   const g = { id: 'g' + uid(), name: name.trim(), rot: 0, scale: curGroup().scale, vis: true };
   p.groups.push(g); p.active = g.id; save(); refreshGroups(); drawPlan();
 });
-$('#grpRen').addEventListener('click', () => {
-  const g = curGroup(), name = prompt('Nuovo nome del gruppo:', g.name); if (!name) return;
+$('#grpRen').addEventListener('click', async () => {
+  const g = curGroup(), name = await uiPrompt('Nuovo nome del gruppo:', g.name); if (!name) return;
   g.name = name.trim(); save(); refreshGroups();
 });
-$('#grpDel').addEventListener('click', () => {
+$('#grpDel').addEventListener('click', async () => {
   const p = curPlan(), g = curGroup();
   const ids = Object.keys(p.points).filter(k => groupOf(p, p.points[k]).id === g.id);
-  if (!confirm(`Eliminare il gruppo «${g.name}» e le sue ${ids.length} etichette?`)) return;
+  if (!await uiConfirm(`Eliminare il gruppo «${g.name}» e le sue ${ids.length} etichette?`)) return;
   ids.forEach(k => delete p.points[k]);
   if (p.groups.length > 1) p.groups = p.groups.filter(x => x.id !== g.id);
   p.active = p.groups[0].id; selKey = null; save(); refreshGroups(); drawPlan();
@@ -511,26 +533,26 @@ $('#grpRot').addEventListener('click', () => {
   Object.values(p.points).forEach(pt => { if (groupOf(p, pt).id === g.id) delete pt.r; });
   save(); drawPlan();
 });
-$('#lblRot').addEventListener('click', () => {
+$('#lblRot').addEventListener('click', async () => {
   const p = curPlan(), pt = selKey && p.points[selKey];
-  if (!pt) { alert('Seleziona prima un\'etichetta: toccala (con «Sposta etichette» attivo) o cliccala.'); return; }
+  if (!pt) { await uiAlert('Seleziona prima un\'etichetta: toccala (con «Sposta etichette» attivo) o cliccala.'); return; }
   const cur = pt.r ?? groupOf(p, pt).rot; pt.r = cur ? 0 : 90;
   save(); drawPlan();
 });
-$('#lblMove').addEventListener('click', () => {
+$('#lblMove').addEventListener('click', async () => {
   const p = curPlan(), pt = selKey && p.points[selKey];
-  if (!pt) { alert('Seleziona prima un\'etichetta.'); return; }
+  if (!pt) { await uiAlert('Seleziona prima un\'etichetta.'); return; }
   pt.g = p.active; delete pt.r; save(); refreshGroups(); drawPlan();
 });
 $('#labelSize').addEventListener('input', () => {
   curGroup().scale = parseFloat($('#labelSize').value);
   save(); drawPlan();
 });
-$('#clearPts').addEventListener('click', () => {
+$('#clearPts').addEventListener('click', async () => {
   const piano = $('#planPiano').value;
   const n = Object.keys(S.plans[piano].points).length;
-  if (!n) { alert('Non ci sono etichette posizionate su questo piano.'); return; }
-  if (!confirm(`Eliminare tutte le ${n} etichette di questo piano? Le assegnazioni non vengono toccate.`)) return;
+  if (!n) { await uiAlert('Non ci sono etichette posizionate su questo piano.'); return; }
+  if (!await uiConfirm(`Eliminare tutte le ${n} etichette di questo piano? Le assegnazioni non vengono toccate.`)) return;
   S.plans[piano].points = {}; selKey = null;
   save(); refreshGroups(); drawPlan();
 });
@@ -599,7 +621,7 @@ $('#planFile').addEventListener('change', async e => {
     const blob = isPdf ? await pdfToPng(f, +$('#pdfPage').value || 1) : isSvg ? await svgToPng(f) : f;
     await idbPut('plan-' + $('#planPiano').value, blob);
   } catch (err) {
-    alert('Impossibile caricare il file: ' + err.message);
+    await uiAlert('Impossibile caricare il file: ' + err.message);
     e.target.value = '';
     return;
   }
@@ -661,16 +683,16 @@ $('#exportBtn').addEventListener('click', () => {
 });
 $('#importFile').addEventListener('change', async e => {
   const f = e.target.files[0];
-  if (!f || !confirm('Sostituire i dati attuali con il backup?')) return;
+  if (!f || !await uiConfirm('Sostituire i dati attuali con il backup?')) return;
   try {
     const obj = JSON.parse(await f.text());
     if (!obj.rooms || !obj.std || !obj.var) throw new Error('formato');
     obj.perm = obj.perm || [];
     S = obj; save(); fillRoomSelects(); fillMapRooms(); refreshGroups(); $('#corta').value = S.corta.join(', '); renderAll();
-  } catch (err) { alert('Backup non valido.'); }
+  } catch (err) { await uiAlert('Backup non valido.'); }
 });
-$('#resetBtn').addEventListener('click', () => {
-  if (!confirm('Cancellare tutte le assegnazioni e le posizioni sulle planimetrie?')) return;
+$('#resetBtn').addEventListener('click', async () => {
+  if (!await uiConfirm('Cancellare tutte le assegnazioni e le posizioni sulle planimetrie?')) return;
   S = fresh(); save(); fillRoomSelects(); fillMapRooms(); refreshGroups(); $('#corta').value = S.corta.join(', '); renderAll();
 });
 
@@ -689,10 +711,10 @@ const FISSE = [
   ['primo-11', '2D'], ['primo-13', '2A'], ['primo-15', '2B'], ['primo-16', '2C'],
   ['primo-23', '1A'], ['primo-24', '1D'], ['primo-25', '1B']
 ];
-$('#fisseBtn').addEventListener('click', () => {
+$('#fisseBtn').addEventListener('click', async () => {
   const nuove = FISSE.filter(([rid]) => room(rid) && !permOf(rid).length);
-  if (!nuove.length) { alert('Queste aule hanno già un\'assegnazione fissa.'); return; }
-  if (!confirm(`Aggiungere ${nuove.length} assegnazioni fisse (classi nelle aule indicate dalle planimetrie, 1C in aula 9)?`)) return;
+  if (!nuove.length) { await uiAlert('Queste aule hanno già un\'assegnazione fissa.'); return; }
+  if (!await uiConfirm(`Aggiungere ${nuove.length} assegnazioni fisse (classi nelle aule indicate dalle planimetrie, 1C in aula 9)?`)) return;
   nuove.forEach(([rid, c]) => S.perm.push({ id: uid(), roomId: rid, etichetta: c, tipo: 'classe', docente: '', note: 'da planimetria' }));
   save(); renderAll();
 });
@@ -869,11 +891,11 @@ $('#roomsFile').addEventListener('change', async e => {
       rows = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
     } else rows = parseCSV(await f.text());
     const hasAss = rows[0].some(h => /assegnazione/i.test(h));
-    if (hasAss && (S.perm.length || S.std.length || S.var.length) && !confirm('Il foglio contiene le assegnazioni: sostituiranno tutte quelle attuali dell\'app. Continuare?')) { e.target.value = ''; return; }
+    if (hasAss && (S.perm.length || S.std.length || S.var.length) && !await uiConfirm('Il foglio contiene le assegnazioni: sostituiranno tutte quelle attuali dell\'app. Continuare?')) { e.target.value = ''; return; }
     const r = importRooms(rows);
-    alert(`Aule: ${r.add} nuove, ${r.upd} aggiornate.` + (r.hasAss ? ` Assegnazioni: ${r.nPerm} fisse, ${r.nTemp} temporanee.` : ' Assegnazioni non toccate.') +
+    await uiAlert(`Aule: ${r.add} nuove, ${r.upd} aggiornate.` + (r.hasAss ? ` Assegnazioni: ${r.nPerm} fisse, ${r.nTemp} temporanee.` : ' Assegnazioni non toccate.') +
       (r.skip.length ? ` Righe ignorate (dati incompleti): ${r.skip.join(', ')}.` : ''));
-  } catch (err) { alert('Importazione non riuscita: ' + err.message); }
+  } catch (err) { await uiAlert('Importazione non riuscita: ' + err.message); }
   e.target.value = '';
 });
 $('#roomsCsv').addEventListener('click', () => {
