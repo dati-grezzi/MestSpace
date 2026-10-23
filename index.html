@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#EDF2E7">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;600;700&family=Inter:wght@400;500;600;700&family=Share+Tech+Mono&family=Saira+Condensed:wght@500;600&family=Architects+Daughter&display=swap" rel="stylesheet">
 <style>
   /* Stile "registro" (come SOStituto e GEclass) in versione verde: carta salvia, inchiostro verde scuro, accenti verdi */
   :root{
@@ -205,7 +205,11 @@
       <button id="grpDel">Elimina gruppo</button>
       <label><input type="checkbox" id="grpVis" checked> Visibile</label>
       <button id="grpRot">Ruota gruppo 90°</button>
-      <label>Dimensione <input type="range" id="labelSize" min="0.4" max="2" step="0.05" value="1"></label>
+      <label>Dimensione <input type="range" id="labelSize" min="0.4" max="3" step="0.05" value="1"></label>
+      <label>Carattere <select id="grpFont"></select></label>
+      <label>Testo <input type="color" id="grpTc" value="#111111"></label>
+      <label>Sfondo <input type="color" id="grpBg" value="#ffffff"></label>
+      <button id="grpStyleReset">Stile predefinito</button>
     </div>
     <div class="bar">
       <select id="mapRoom"></select>
@@ -214,10 +218,18 @@
       <button id="remPt">Rimuovi etichetta</button>
       <button id="lblRot">Ruota etichetta 90°</button>
       <button id="lblMove">Sposta nel gruppo attivo</button>
+    </div>
+    <div class="bar" id="lblBar">
+      <b>Etichetta selezionata:</b>
+      <label>Dimensione <input type="range" id="lblSize" min="0.3" max="4" step="0.05" value="1"></label>
+      <label>Carattere <select id="lblFont"></select></label>
+      <label>Testo <input type="color" id="lblTc" value="#111111"></label>
+      <label>Sfondo <input type="color" id="lblBg" value="#ffffff"></label>
+      <button id="lblReset">Segui il gruppo</button>
       <span id="freeHint" class="hint" hidden><b>Tocca il disegno per posizionare la nuova etichetta.</b></span>
       <span id="selInfo" class="hint">Nessuna etichetta selezionata.</span>
     </div>
-    <p class="hint">Scegli dall'elenco un <b>numero</b> (1–27), l'<b>etichetta</b> del locale (es. Biblioteca) o le <b>attività</b> assegnate a un'aula, poi tocca il disegno nel punto in cui metterli: sono tre elementi indipendenti. Con «+ Aggiungi etichetta» crei invece un'etichetta libera con testo a piacere (es. Ingresso), che va nel gruppo attivo. Per spostarne una già posizionata trascinala: col mouse basta farlo, sul telefono attiva prima «Sposta etichette». Ogni <b>gruppo</b> è un livello con rotazione, dimensione e visibilità proprie: le nuove etichette vanno nel gruppo attivo e le modifiche di gruppo toccano solo quelle. «Ruota etichetta» agisce sulla singola etichetta selezionata (quella appena posizionata o toccata). Le attività seguono la settimana selezionata nel tab Settimana.</p>
+    <p class="hint">Scegli dall'elenco un <b>numero</b> (1–27), l'<b>etichetta</b> del locale (es. Biblioteca) o le <b>attività</b> assegnate a un'aula, poi tocca il disegno nel punto in cui metterli: sono tre elementi indipendenti. Con «+ Aggiungi etichetta» crei invece un'etichetta libera con testo a piacere (es. Ingresso), che va nel gruppo attivo. Per spostarne una già posizionata trascinala: col mouse basta farlo, sul telefono attiva prima «Sposta etichette». Ogni <b>gruppo</b> è un livello con rotazione, dimensione, carattere, colori e visibilità propri: le nuove etichette vanno nel gruppo attivo e le modifiche di gruppo toccano solo quelle. Le impostazioni della barra «Etichetta selezionata» (rotazione, dimensione, carattere, colori) valgono solo per quella etichetta, svincolata dal gruppo, finché non premi «Segui il gruppo». Le attività seguono la settimana selezionata nel tab Settimana.</p>
     <canvas id="planCanvas"></canvas>
   </section>
 
@@ -288,6 +300,6 @@
   </button>
 </nav>
 
-<script src="app.js?v=20261023"></script>
+<script src="app.js?v=20261023b"></script>
 </body>
 </html>

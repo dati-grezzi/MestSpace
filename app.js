@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-10-23 · etichette libere';
+const VERSION = '2026-10-23 · stile etichette';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -346,11 +346,28 @@ function grpsOf(piano) {
 }
 const groupOf = (p, pt) => p.groups.find(g => g.id === pt.g) || p.groups[0];
 let selKey = null;   // etichetta selezionata (ultima toccata o posizionata)
-function drawLabel(text, x, y, key, isNum, rot, scale, selected) {
+// caratteri disponibili per le etichette ("CAD" = stile tecnico da disegno)
+const FONTS = {
+  '':      { name: 'Predefinito', css: 'sans-serif', w: 'bold' },
+  cad:     { name: 'CAD (tecnico)', css: '"Share Tech Mono", "Courier New", monospace', w: 'normal' },
+  cadc:    { name: 'CAD condensato', css: '"Saira Condensed", "Arial Narrow", sans-serif', w: '600' },
+  zilla:   { name: 'Slab (registro)', css: '"Zilla Slab", Georgia, serif', w: '600' },
+  hand:    { name: 'Architetto (a mano)', css: '"Architects Daughter", cursive', w: 'normal' }
+};
+async function ensureFonts(keys) {
+  if (!document.fonts || !document.fonts.load) return;
+  await Promise.all([...new Set(keys)].filter(k => FONTS[k] && k).map(k => Promise.race([document.fonts.load(`16px ${FONTS[k].css}`).catch(() => 0), new Promise(r => setTimeout(r, 1500))])));
+}
+// stile effettivo: l'etichetta ha la precedenza sul gruppo, il gruppo sui valori predefiniti
+const styleOf = (pt, g) => ({
+  rot: (pt.r ?? g.rot) ? 1 : 0, scale: pt.sc ?? g.scale ?? 1, font: pt.font ?? g.font ?? '', tc: pt.tc ?? g.tc ?? null, bg: pt.bg ?? g.bg ?? null
+});
+function drawLabel(text, x, y, key, isNum, st, selected) {
   // la dimensione segue la larghezza del disegno, così resta leggibile anche su immagini grandi
-  const fs = Math.max(8, Math.round(Math.max(14, canvas.width / 55) * (scale || 1)));
+  const rot = st.rot, f = FONTS[st.font] || FONTS[''];
+  const fs = Math.max(8, Math.round(Math.max(14, canvas.width / 55) * (st.scale || 1)));
   const h = fs * 1.6;
-  ctx.font = `bold ${fs}px sans-serif`;
+  ctx.font = `${f.w} ${fs}px ${f.css}`;
   const w = ctx.measureText(text).width + fs * 0.8;
   const bw = rot ? h : w, bh = rot ? w : h;                 // ingombro a schermo
   const cx = x, cy = y - bh / 2 - 4;                        // centro: l'etichetta sta sopra il punto
@@ -358,18 +375,14 @@ function drawLabel(text, x, y, key, isNum, rot, scale, selected) {
   ctx.save();
   ctx.translate(cx, cy);
   if (rot) ctx.rotate(-Math.PI / 2);
-  ctx.strokeStyle = '#1F3027';
+  const tc = st.tc || (isNum ? '#ffffff' : '#111111');
+  const bg = st.bg || (isNum ? '#1F3027' : 'rgba(255,255,255,.88)');
+  ctx.strokeStyle = st.tc || '#1F3027';
   ctx.lineWidth = Math.max(1, fs / 12);
-  if (isNum) {   // numero aula: pallino scuro con cifra chiara
-    ctx.fillStyle = '#1F3027';
-    ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, h / 2); ctx.fill();
-    ctx.fillStyle = '#fff';
-  } else {
-    ctx.fillStyle = 'rgba(255,255,255,.88)';
-    ctx.fillRect(-w / 2, -h / 2, w, h);
-    ctx.strokeRect(-w / 2, -h / 2, w, h);
-    ctx.fillStyle = '#111';
-  }
+  ctx.fillStyle = bg;
+  if (isNum) { ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, h / 2); ctx.fill(); if (st.bg) ctx.stroke(); }
+  else { ctx.fillRect(-w / 2, -h / 2, w, h); ctx.strokeRect(-w / 2, -h / 2, w, h); }
+  ctx.fillStyle = tc;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(text, 0, 0);
   if (selected) {
@@ -389,6 +402,8 @@ async function drawPlan() {
     ctx.fillText('Carica la planimetria di questo piano.', 20, 60);
     return;
   }
+  grpsOf(piano);
+  await ensureFonts([...p.groups.map(g => g.font), ...Object.values(p.points).map(pt => pt.font)].filter(Boolean));
   const rot = p.rot || 0;
   const side = rot % 180 !== 0;
   const rw = side ? im.height : im.width, rh = side ? im.width : im.height;
@@ -411,17 +426,17 @@ async function drawPlan() {
   for (const [key, pt] of Object.entries(p.points)) {
     const g = groupOf(p, pt);
     if (!g.vis) continue;
-    const rot = (pt.r ?? g.rot) ? 1 : 0, sel = key === selKey && !exporting;
+    const st = styleOf(pt, g), sel = key === selKey && !exporting;
     const kind = key.startsWith('n:') ? 'n' : key.startsWith('e:') ? 'e' : key.startsWith('f:') ? 'f' : 'a';
     const x = pt.x * W, y = pt.y * H;
-    if (kind === 'f') { const t = p.free?.[key.slice(2)]; if (t) drawLabel(t, x, y, key, false, rot, g.scale, sel); continue; }   // etichetta libera
+    if (kind === 'f') { const t = p.free?.[key.slice(2)]; if (t) drawLabel(t, x, y, key, false, st, sel); continue; }   // etichetta libera
     const r = room(kind === 'a' ? key : key.slice(2));
     if (!r) continue;
-    if (kind === 'n') { if (showNums && r.numero != null) drawLabel(String(r.numero), x, y + 4, key, true, rot, g.scale, sel); continue; }
-    if (kind === 'e') { if ($('#showNames').checked) drawLabel(r.nome, x, y, key, false, rot, g.scale, sel); continue; }
+    if (kind === 'n') { if (showNums && r.numero != null) drawLabel(String(r.numero), x, y + 4, key, true, st, sel); continue; }
+    if (kind === 'e') { if ($('#showNames').checked) drawLabel(r.nome, x, y, key, false, st, sel); continue; }
     if (!showLabels) continue;
     const t = labelFor(r, mon); if (!t) continue;
-    drawLabel(t, x, y, key, false, rot, g.scale, sel);
+    drawLabel(t, x, y, key, false, st, sel);
   }
 }
 function fillMapRooms() {
@@ -496,11 +511,22 @@ const curPlan = () => S.plans[$('#planPiano').value];
 const curGroup = () => { const p = curPlan(); grpsOf($('#planPiano').value); return p.groups.find(g => g.id === p.active); };
 function updateSel() {
   const p = curPlan(), pt = selKey && p.points[selKey];
-  if (!pt) { selKey = null; $('#selInfo').textContent = 'Nessuna etichetta selezionata.'; return; }
-  if (selKey.startsWith('f:')) { $('#selInfo').textContent = `Selezionata: etichetta libera «${p.free?.[selKey.slice(2)] || ''}» · ${groupOf(p, pt).name}`; return; }
+  if (!pt) { selKey = null; $('#selInfo').textContent = 'Nessuna etichetta selezionata.'; if ($('#grpFont')) syncStyleControls(); return; }
+  if (selKey.startsWith('f:')) { $('#selInfo').textContent = `Selezionata: etichetta libera «${p.free?.[selKey.slice(2)] || ''}» · ${groupOf(p, pt).name}`; if ($('#grpFont')) syncStyleControls(); return; }
   const k = selKey.startsWith('n:') ? 'numero' : selKey.startsWith('e:') ? 'etichetta' : 'attività';
   const r = room(selKey.replace(/^[ne]:/, ''));
   $('#selInfo').textContent = `Selezionata: ${k} ${r ? (r.numero ?? r.nome) : ''} · ${groupOf(p, pt).name}`;
+  if ($('#grpFont')) syncStyleControls();
+}
+const fontOpts = withDefault => (withDefault ? '<option value="__g">Come il gruppo</option>' : '') + Object.entries(FONTS).map(([k, f]) => `<option value="${k}">${f.name}</option>`).join('');
+function syncStyleControls() {
+  const p = curPlan(), g = curGroup(), pt = selKey && p.points[selKey];
+  $('#grpFont').value = g.font || ''; $('#grpTc').value = g.tc || '#111111'; $('#grpBg').value = g.bg || '#ffffff';
+  const isNum = selKey && selKey.startsWith('n:');
+  if (!pt) { $('#lblSize').value = g.scale; $('#lblFont').value = '__g'; $('#lblTc').value = g.tc || '#111111'; $('#lblBg').value = g.bg || '#ffffff'; return; }
+  const st = styleOf(pt, groupOf(p, pt));
+  $('#lblSize').value = st.scale; $('#lblFont').value = pt.font === undefined ? '__g' : pt.font;
+  $('#lblTc').value = st.tc || (isNum ? '#ffffff' : '#111111'); $('#lblBg').value = st.bg || (isNum ? '#1f3027' : '#ffffff');
 }
 function refreshGroups() {
   const piano = $('#planPiano').value, p = S.plans[piano];
@@ -510,7 +536,7 @@ function refreshGroups() {
   $('#grpSel').value = p.active;
   const g = curGroup();
   $('#grpVis').checked = g.vis; $('#labelSize').value = g.scale;
-  updateSel();
+  updateSel(); syncStyleControls();
 }
 $('#grpSel').addEventListener('change', () => { curPlan().active = $('#grpSel').value; save(); refreshGroups(); });
 $('#grpAdd').addEventListener('click', async () => {
@@ -549,6 +575,22 @@ $('#lblMove').addEventListener('click', async () => {
   if (!pt) { await uiAlert('Seleziona prima un\'etichetta.'); return; }
   pt.g = p.active; delete pt.r; save(); refreshGroups(); drawPlan();
 });
+$('#grpFont').innerHTML = fontOpts(false); $('#lblFont').innerHTML = fontOpts(true);
+$('#grpFont').addEventListener('change', () => { curGroup().font = $('#grpFont').value; save(); drawPlan(); });
+$('#grpTc').addEventListener('input', () => { curGroup().tc = $('#grpTc').value; save(); drawPlan(); });
+$('#grpBg').addEventListener('input', () => { curGroup().bg = $('#grpBg').value; save(); drawPlan(); });
+$('#grpStyleReset').addEventListener('click', () => { const g = curGroup(); delete g.font; delete g.tc; delete g.bg; save(); syncStyleControls(); drawPlan(); });
+// stile della singola etichetta selezionata (svincolata dal gruppo)
+async function onSel(fn) {
+  const p = curPlan(), pt = selKey && p.points[selKey];
+  if (!pt) { await uiAlert('Seleziona prima un\'etichetta: cliccala (col telefono attiva «Sposta etichette» e toccala).'); syncStyleControls(); return; }
+  fn(pt); save(); drawPlan(); updateSel();
+}
+$('#lblSize').addEventListener('input', () => onSel(pt => { pt.sc = parseFloat($('#lblSize').value); }));
+$('#lblFont').addEventListener('change', () => onSel(pt => { if ($('#lblFont').value === '__g') delete pt.font; else pt.font = $('#lblFont').value; }));
+$('#lblTc').addEventListener('input', () => onSel(pt => { pt.tc = $('#lblTc').value; }));
+$('#lblBg').addEventListener('input', () => onSel(pt => { pt.bg = $('#lblBg').value; }));
+$('#lblReset').addEventListener('click', () => onSel(pt => { ['r', 'sc', 'font', 'tc', 'bg'].forEach(k => delete pt[k]); }));
 $('#labelSize').addEventListener('input', () => {
   curGroup().scale = parseFloat($('#labelSize').value);
   save(); drawPlan();
