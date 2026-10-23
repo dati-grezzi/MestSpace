@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-10-23 · stile etichette';
+const VERSION = '2026-10-23 · PDF A3 planimetria';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -715,14 +715,39 @@ $('#pngBtn').addEventListener('click', async () => {
     a.click();
   });
 });
+let jsPdfLib;
+function loadJsPdf() {
+  if (window.jspdf) return Promise.resolve(window.jspdf.jsPDF);
+  return jsPdfLib || (jsPdfLib = new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    sc.onload = () => res(window.jspdf.jsPDF);
+    sc.onerror = () => { jsPdfLib = null; rej(new Error('libreria PDF non raggiungibile (serve connessione)')); };
+    document.head.appendChild(sc);
+  }));
+}
+// «Stampa»: genera direttamente un PDF A3, orientato come la planimetria (orizzontale se più larga che alta)
 $('#printPlan').addEventListener('click', async () => {
-  exporting = true; await drawPlan();
-  const url = canvas.toDataURL();
-  exporting = false; drawPlan();
-  const w = window.open('');
-  w.document.write(`<img src="${url}" style="width:100%">`);
-  w.document.close();
-  w.onload = () => w.print();
+  if (!canvas.width || canvas.width < 700) { await uiAlert('Carica prima la planimetria di questo piano.'); return; }
+  try {
+    const JsPDF = await loadJsPdf();
+    exporting = true; await drawPlan();                 // senza il contorno di selezione
+    const data = canvas.toDataURL('image/jpeg', 0.95), cw = canvas.width, ch = canvas.height;
+    exporting = false; drawPlan();
+    const land = cw >= ch;
+    const doc = new JsPDF({ orientation: land ? 'landscape' : 'portrait', unit: 'mm', format: 'a3' });
+    const PW = land ? 420 : 297, PH = land ? 297 : 420, m = 8, foot = 7;
+    const k = Math.min((PW - 2 * m) / cw, (PH - 2 * m - foot) / ch);
+    const w = cw * k, hh = ch * k;
+    doc.addImage(data, 'JPEG', (PW - w) / 2, m, w, hh);
+    const piano = $('#planPiano').value, mon = mondayOf(weekDate), d = parseISO(mon);
+    doc.setFontSize(9); doc.setTextColor(90);
+    doc.text(`MestSpace · Scuola secondaria Mestica · ${piano === 'terra' ? 'Piano terra' : 'Primo piano'} · settimana dal ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`, PW / 2, PH - m + 1, { align: 'center' });
+    doc.save(`planimetria-${piano}-${mon}.pdf`);
+  } catch (err) {
+    exporting = false; drawPlan();
+    await uiAlert('Impossibile creare il PDF: ' + err.message + '. Puoi usare «Scarica PNG».');
+  }
 });
 
 /* ---------- tab Settimana: navigazione ---------- */
