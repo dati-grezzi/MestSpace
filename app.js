@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-10-22 · gruppi etichette + dialoghi';
+const VERSION = '2026-10-23 · etichette libere';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -412,10 +412,11 @@ async function drawPlan() {
     const g = groupOf(p, pt);
     if (!g.vis) continue;
     const rot = (pt.r ?? g.rot) ? 1 : 0, sel = key === selKey && !exporting;
-    const kind = key.startsWith('n:') ? 'n' : key.startsWith('e:') ? 'e' : 'a';
+    const kind = key.startsWith('n:') ? 'n' : key.startsWith('e:') ? 'e' : key.startsWith('f:') ? 'f' : 'a';
+    const x = pt.x * W, y = pt.y * H;
+    if (kind === 'f') { const t = p.free?.[key.slice(2)]; if (t) drawLabel(t, x, y, key, false, rot, g.scale, sel); continue; }   // etichetta libera
     const r = room(kind === 'a' ? key : key.slice(2));
     if (!r) continue;
-    const x = pt.x * W, y = pt.y * H;
     if (kind === 'n') { if (showNums && r.numero != null) drawLabel(String(r.numero), x, y + 4, key, true, rot, g.scale, sel); continue; }
     if (kind === 'e') { if ($('#showNames').checked) drawLabel(r.nome, x, y, key, false, rot, g.scale, sel); continue; }
     if (!showLabels) continue;
@@ -434,13 +435,14 @@ function fillMapRooms() {
 }
 /* posizionare e trascinare le etichette */
 let drag = null;
+let pendingFree = null;   // etichetta libera creata e in attesa di essere posizionata
 const canvasXY = e => {
   const r = canvas.getBoundingClientRect();
   return { x: (e.clientX - r.left) * canvas.width / r.width, y: (e.clientY - r.top) * canvas.height / r.height };
 };
 const labelAt = p => [...labelBoxes].reverse().find(b => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h);
 canvas.addEventListener('pointerdown', e => {
-  if (!canvas.width || !Object.keys(S.plans[$('#planPiano').value].points).length && $('#moveMode').checked) return;
+  if (!canvas.width || !Object.keys(S.plans[$('#planPiano').value].points).length && $('#moveMode').checked && !pendingFree) return;
   const p = canvasXY(e);
   const piano = $('#planPiano').value;
   const move = $('#moveMode').checked;
@@ -455,14 +457,15 @@ canvas.addEventListener('pointerdown', e => {
     e.preventDefault();
     return;
   }
-  if (move) return;   // in modalità sposta un tocco a vuoto non crea etichette
-  const rid = $('#mapRoom').value;
+  if (move && !pendingFree) return;   // in modalità sposta un tocco a vuoto non crea etichette
+  const rid = pendingFree || $('#mapRoom').value;
   if (!rid) return;
   grpsOf(piano);
   S.plans[piano].points[rid] = { x: p.x / canvas.width, y: p.y / canvas.height, g: S.plans[piano].active };
   selKey = rid; updateSel();
   save();
   drawPlan();
+  if (pendingFree) { pendingFree = null; $('#freeHint').hidden = true; refreshGroups(); return; }
   $('#mapRoom').selectedIndex = Math.min($('#mapRoom').selectedIndex + 1, $('#mapRoom').options.length - 1);
 });
 canvas.addEventListener('pointermove', e => {
@@ -494,6 +497,7 @@ const curGroup = () => { const p = curPlan(); grpsOf($('#planPiano').value); ret
 function updateSel() {
   const p = curPlan(), pt = selKey && p.points[selKey];
   if (!pt) { selKey = null; $('#selInfo').textContent = 'Nessuna etichetta selezionata.'; return; }
+  if (selKey.startsWith('f:')) { $('#selInfo').textContent = `Selezionata: etichetta libera «${p.free?.[selKey.slice(2)] || ''}» · ${groupOf(p, pt).name}`; return; }
   const k = selKey.startsWith('n:') ? 'numero' : selKey.startsWith('e:') ? 'etichetta' : 'attività';
   const r = room(selKey.replace(/^[ne]:/, ''));
   $('#selInfo').textContent = `Selezionata: ${k} ${r ? (r.numero ?? r.nome) : ''} · ${groupOf(p, pt).name}`;
@@ -554,7 +558,7 @@ $('#clearPts').addEventListener('click', async () => {
   const n = Object.keys(S.plans[piano].points).length;
   if (!n) { await uiAlert('Non ci sono etichette posizionate su questo piano.'); return; }
   if (!await uiConfirm(`Eliminare tutte le ${n} etichette di questo piano? Le assegnazioni non vengono toccate.`)) return;
-  S.plans[piano].points = {}; selKey = null;
+  S.plans[piano].points = {}; S.plans[piano].free = {}; selKey = null;
   save(); refreshGroups(); drawPlan();
 });
 $('#planPiano').addEventListener('change', () => {
@@ -635,9 +639,25 @@ $('#rotBtn').addEventListener('click', () => {
   S.plans[piano].rot = ((S.plans[piano].rot || 0) + 90) % 360;
   save(); drawPlan();
 });
+$('#freeAdd').addEventListener('click', async () => {
+  const piano = $('#planPiano').value, p = S.plans[piano];
+  const t = await uiPrompt('Testo della nuova etichetta (es. Ingresso, Uscita di emergenza, Nord):', '');
+  if (!t || !t.trim()) return;
+  const id = uid(); (p.free = p.free || {})[id] = t.trim();
+  pendingFree = 'f:' + id; $('#freeHint').hidden = false; save();
+});
+$('#freeEdit').addEventListener('click', async () => {
+  const p = curPlan();
+  if (!selKey || !selKey.startsWith('f:')) { await uiAlert('Seleziona prima un\'etichetta libera.'); return; }
+  const t = await uiPrompt('Modifica il testo:', p.free[selKey.slice(2)] || '');
+  if (!t || !t.trim()) return;
+  p.free[selKey.slice(2)] = t.trim(); save(); updateSel(); drawPlan();
+});
 $('#remPt').addEventListener('click', () => {
   const piano = $('#planPiano').value;
-  delete S.plans[piano].points[selKey || $('#mapRoom').value];
+  const k = selKey || $('#mapRoom').value;
+  if (k.startsWith('f:') && S.plans[piano].free) delete S.plans[piano].free[k.slice(2)];
+  delete S.plans[piano].points[k];
   selKey = null; save(); refreshGroups(); drawPlan();
 });
 $('#showLabels').addEventListener('change', drawPlan);
