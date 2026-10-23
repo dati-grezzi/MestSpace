@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-10-23 · gruppi: nascondi e blocca';
+const VERSION = '2026-10-23 · etichette su più righe';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -17,14 +17,14 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '
 const colorOf = s => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 55% 84%)`; };
 
 /* ---------- finestre di dialogo interne (alert/confirm/prompt nativi non funzionano in anteprima e in alcuni browser) ---------- */
-function uiDialog(msg, { input, ok = 'OK', cancel } = {}) {
+function uiDialog(msg, { input, ok = 'OK', cancel, multi } = {}) {
   return new Promise(res => {
     const ov = document.createElement('div'); ov.className = 'dlg-ov';
-    ov.innerHTML = `<div class="dlg" role="dialog" aria-modal="true"><p></p>${input !== undefined ? '<input type="text">' : ''}<div class="dlg-b">${cancel ? '<button data-c>' + cancel + '</button>' : ''}<button class="primary" data-ok>${ok}</button></div></div>`;
+    ov.innerHTML = `<div class="dlg" role="dialog" aria-modal="true"><p></p>${input !== undefined ? (multi ? '<textarea rows="4"></textarea>' : '<input type="text">') : ''}<div class="dlg-b">${cancel ? '<button data-c>' + cancel + '</button>' : ''}<button class="primary" data-ok>${ok}</button></div></div>`;
     ov.querySelector('p').textContent = msg;
-    const inp = ov.querySelector('input'); if (inp) inp.value = input;
+    const inp = ov.querySelector('input,textarea'); if (inp) inp.value = input;
     const done = v => { ov.remove(); document.removeEventListener('keydown', key, true); res(v); };
-    const key = e => { if (e.key === 'Escape') { e.stopPropagation(); done(inp ? null : cancel ? false : undefined); } else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); done(inp ? inp.value : true); } };
+    const key = e => { if (e.key === 'Escape') { e.stopPropagation(); done(inp ? null : cancel ? false : undefined); } else if (e.key === 'Enter' && (!multi || e.ctrlKey || e.metaKey)) { e.preventDefault(); e.stopPropagation(); done(inp ? inp.value : true); } };
     ov.addEventListener('click', e => {
       if (e.target.closest('[data-ok]')) done(inp ? inp.value : true);
       else if (e.target.closest('[data-c]') || e.target === ov) done(inp ? null : cancel ? false : undefined);
@@ -37,6 +37,7 @@ function uiDialog(msg, { input, ok = 'OK', cancel } = {}) {
 const uiAlert = msg => uiDialog(msg);
 const uiConfirm = msg => uiDialog(msg, { ok: 'Conferma', cancel: 'Annulla' });
 const uiPrompt = (msg, def = '') => uiDialog(msg, { input: def, ok: 'OK', cancel: 'Annulla' });
+const uiPromptMulti = (msg, def = '') => uiDialog(msg, { input: def, ok: 'OK', cancel: 'Annulla', multi: true });
 
 /* ---------- preferenze di visualizzazione (solo questo dispositivo) ---------- */
 const UI_KEY = 'mestspace-ui';
@@ -368,9 +369,11 @@ function drawLabel(text, x, y, key, isNum, st, selected) {
   // la dimensione segue la larghezza del disegno, così resta leggibile anche su immagini grandi
   const rot = st.rot, f = FONTS[st.font] || FONTS[''];
   const fs = Math.max(8, Math.round(Math.max(14, canvas.width / 55) * (st.scale || 1)));
-  const h = fs * 1.6;
   ctx.font = `${f.w} ${fs}px ${f.css}`;
-  const w = ctx.measureText(text).width + fs * 0.8;
+  const lines = String(text).split('\n');
+  const lh = fs * 1.25;
+  const h = lines.length > 1 ? lines.length * lh + fs * 0.5 : fs * 1.6;
+  const w = Math.max(...lines.map(l => ctx.measureText(l).width)) + fs * 0.8;
   const bw = rot ? h : w, bh = rot ? w : h;                 // ingombro a schermo
   const cx = x, cy = y - bh / 2 - 4;                        // centro: l'etichetta sta sopra il punto
   labelBoxes.push({ rid: key, x: cx - bw / 2, y: cy - bh / 2, w: bw, h: bh });
@@ -386,7 +389,7 @@ function drawLabel(text, x, y, key, isNum, st, selected) {
   else { ctx.fillRect(-w / 2, -h / 2, w, h); ctx.strokeRect(-w / 2, -h / 2, w, h); }
   ctx.fillStyle = tc;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(text, 0, 0);
+  lines.forEach((l, i) => ctx.fillText(l, 0, (i - (lines.length - 1) / 2) * lh));
   if (selected) {
     ctx.strokeStyle = '#C62828'; ctx.lineWidth = Math.max(2, fs / 8); ctx.setLineDash([fs / 3, fs / 4]);
     ctx.strokeRect(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6);
@@ -516,7 +519,7 @@ const curGroup = () => { const p = curPlan(); grpsOf($('#planPiano').value); ret
 function updateSel() {
   const p = curPlan(), pt = selKey && p.points[selKey];
   if (!pt) { selKey = null; $('#selInfo').textContent = 'Nessuna etichetta selezionata.'; if ($('#grpFont')) syncStyleControls(); return; }
-  if (selKey.startsWith('f:')) { $('#selInfo').textContent = `Selezionata: etichetta libera «${p.free?.[selKey.slice(2)] || ''}» · ${groupOf(p, pt).name}`; if ($('#grpFont')) syncStyleControls(); return; }
+  if (selKey.startsWith('f:')) { $('#selInfo').textContent = `Selezionata: etichetta libera «${(p.free?.[selKey.slice(2)] || '').replace(/\n/g, ' ⏎ ')}» · ${groupOf(p, pt).name}`; if ($('#grpFont')) syncStyleControls(); return; }
   const k = selKey.startsWith('n:') ? 'numero' : selKey.startsWith('e:') ? 'etichetta' : 'attività';
   const r = room(selKey.replace(/^[ne]:/, ''));
   $('#selInfo').textContent = `Selezionata: ${k} ${r ? (r.numero ?? r.nome) : ''} · ${groupOf(p, pt).name}`;
@@ -702,7 +705,7 @@ $('#rotBtn').addEventListener('click', () => {
 });
 $('#freeAdd').addEventListener('click', async () => {
   const piano = $('#planPiano').value, p = S.plans[piano];
-  const t = await uiPrompt('Testo della nuova etichetta (es. Ingresso, Uscita di emergenza, Nord):', '');
+  const t = await uiPromptMulti('Testo della nuova etichetta. Premi Invio per andare a capo su più righe (Ctrl+Invio per confermare):', '');
   if (!t || !t.trim()) return;
   const id = uid(); (p.free = p.free || {})[id] = t.trim();
   pendingFree = 'f:' + id; $('#freeHint').hidden = false; save();
@@ -711,7 +714,7 @@ $('#freeEdit').addEventListener('click', async () => {
   const p = curPlan();
   if (!selKey || !selKey.startsWith('f:')) { await uiAlert('Seleziona prima un\'etichetta libera.'); return; }
   if (isLocked(p, p.points[selKey])) { await lockedMsg(groupOf(p, p.points[selKey])); return; }
-  const t = await uiPrompt('Modifica il testo:', p.free[selKey.slice(2)] || '');
+  const t = await uiPromptMulti('Modifica il testo (Invio = a capo, Ctrl+Invio = conferma):', p.free[selKey.slice(2)] || '');
   if (!t || !t.trim()) return;
   p.free[selKey.slice(2)] = t.trim(); save(); updateSel(); drawPlan();
 });
