@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-10-23 · PDF A3 planimetria';
+const VERSION = '2026-10-23 · gruppi: nascondi e blocca';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -345,6 +345,8 @@ function grpsOf(piano) {
   return p.groups;
 }
 const groupOf = (p, pt) => p.groups.find(g => g.id === pt.g) || p.groups[0];
+const isLocked = (p, pt) => !!groupOf(p, pt).lock;
+async function lockedMsg(g) { await uiAlert(`Il gruppo «${g.name}» è bloccato: sbloccalo per modificarlo.`); }
 let selKey = null;   // etichetta selezionata (ultima toccata o posizionata)
 // caratteri disponibili per le etichette ("CAD" = stile tecnico da disegno)
 const FONTS = {
@@ -456,7 +458,7 @@ const canvasXY = e => {
   return { x: (e.clientX - r.left) * canvas.width / r.width, y: (e.clientY - r.top) * canvas.height / r.height };
 };
 const labelAt = p => [...labelBoxes].reverse().find(b => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h);
-canvas.addEventListener('pointerdown', e => {
+canvas.addEventListener('pointerdown', async e => {
   if (!canvas.width || !Object.keys(S.plans[$('#planPiano').value].points).length && $('#moveMode').checked && !pendingFree) return;
   const p = canvasXY(e);
   const piano = $('#planPiano').value;
@@ -466,6 +468,7 @@ canvas.addEventListener('pointerdown', e => {
   if (b) {
     const pt = S.plans[piano].points[b.rid];
     selKey = b.rid; updateSel();
+    if (isLocked(S.plans[piano], pt)) { e.preventDefault(); return; }   // selezionabile ma non spostabile
     drag = { rid: b.rid, piano, dx: p.x - pt.x * canvas.width, dy: p.y - pt.y * canvas.height, id: e.pointerId };
     canvas.setPointerCapture(e.pointerId);
     canvas.style.cursor = 'grabbing';
@@ -476,6 +479,7 @@ canvas.addEventListener('pointerdown', e => {
   const rid = pendingFree || $('#mapRoom').value;
   if (!rid) return;
   grpsOf(piano);
+  if (curGroup().lock) { await lockedMsg(curGroup()); return; }
   S.plans[piano].points[rid] = { x: p.x / canvas.width, y: p.y / canvas.height, g: S.plans[piano].active };
   selKey = rid; updateSel();
   save();
@@ -523,6 +527,8 @@ function syncStyleControls() {
   const p = curPlan(), g = curGroup(), pt = selKey && p.points[selKey];
   $('#grpFont').value = g.font || ''; $('#grpTc').value = g.tc || '#111111'; $('#grpBg').value = g.bg || '#ffffff';
   const isNum = selKey && selKey.startsWith('n:');
+  const lk = !!(pt && groupOf(p, pt).lock);
+  ['lblSize', 'lblFont', 'lblTc', 'lblBg', 'lblReset', 'lblRot', 'freeEdit', 'remPt'].forEach(i => { $('#' + i).disabled = lk; });
   if (!pt) { $('#lblSize').value = g.scale; $('#lblFont').value = '__g'; $('#lblTc').value = g.tc || '#111111'; $('#lblBg').value = g.bg || '#ffffff'; return; }
   const st = styleOf(pt, groupOf(p, pt));
   $('#lblSize').value = st.scale; $('#lblFont').value = pt.font === undefined ? '__g' : pt.font;
@@ -532,10 +538,13 @@ function refreshGroups() {
   const piano = $('#planPiano').value, p = S.plans[piano];
   grpsOf(piano);
   const n = id => Object.values(p.points).filter(pt => groupOf(p, pt).id === id).length;
-  $('#grpSel').innerHTML = p.groups.map(g => `<option value="${g.id}">${esc(g.name)} (${n(g.id)})${g.vis ? '' : ' – nascosto'}</option>`).join('');
+  $('#grpSel').innerHTML = p.groups.map(g => `<option value="${g.id}">${esc(g.name)} (${n(g.id)})${g.vis ? '' : ' 🚫 nascosto'}${g.lock ? ' 🔒' : ''}</option>`).join('');
   $('#grpSel').value = p.active;
   const g = curGroup();
-  $('#grpVis').checked = g.vis; $('#labelSize').value = g.scale;
+  $('#grpVisBtn').textContent = g.vis ? '👁 Nascondi gruppo' : '👁 Mostra gruppo';
+  $('#grpLockBtn').textContent = g.lock ? '🔓 Sblocca gruppo' : '🔒 Blocca gruppo';
+  ['grpRot', 'grpFont', 'grpTc', 'grpBg', 'grpStyleReset', 'labelSize', 'grpDel'].forEach(i => { $('#' + i).disabled = !!g.lock; });
+  $('#labelSize').value = g.scale;
   updateSel(); syncStyleControls();
 }
 $('#grpSel').addEventListener('change', () => { curPlan().active = $('#grpSel').value; save(); refreshGroups(); });
@@ -551,14 +560,17 @@ $('#grpRen').addEventListener('click', async () => {
 });
 $('#grpDel').addEventListener('click', async () => {
   const p = curPlan(), g = curGroup();
+  if (g.lock) { await lockedMsg(g); return; }
   const ids = Object.keys(p.points).filter(k => groupOf(p, p.points[k]).id === g.id);
   if (!await uiConfirm(`Eliminare il gruppo «${g.name}» e le sue ${ids.length} etichette?`)) return;
   ids.forEach(k => delete p.points[k]);
   if (p.groups.length > 1) p.groups = p.groups.filter(x => x.id !== g.id);
   p.active = p.groups[0].id; selKey = null; save(); refreshGroups(); drawPlan();
 });
-$('#grpVis').addEventListener('change', () => { curGroup().vis = $('#grpVis').checked; save(); refreshGroups(); drawPlan(); });
-$('#grpRot').addEventListener('click', () => {
+$('#grpVisBtn').addEventListener('click', () => { const g = curGroup(); g.vis = !g.vis; if (!g.vis && selKey && groupOf(curPlan(), curPlan().points[selKey]).id === g.id) selKey = null; save(); refreshGroups(); drawPlan(); });
+$('#grpLockBtn').addEventListener('click', () => { const g = curGroup(); g.lock = !g.lock; save(); refreshGroups(); drawPlan(); });
+$('#grpRot').addEventListener('click', async () => {
+  if (curGroup().lock) { await lockedMsg(curGroup()); return; }
   // ruota tutte le etichette del gruppo attivo (e azzera le rotazioni singole)
   const p = curPlan(), g = curGroup(); g.rot = g.rot ? 0 : 90;
   Object.values(p.points).forEach(pt => { if (groupOf(p, pt).id === g.id) delete pt.r; });
@@ -567,23 +579,27 @@ $('#grpRot').addEventListener('click', () => {
 $('#lblRot').addEventListener('click', async () => {
   const p = curPlan(), pt = selKey && p.points[selKey];
   if (!pt) { await uiAlert('Seleziona prima un\'etichetta: toccala (con «Sposta etichette» attivo) o cliccala.'); return; }
+  if (isLocked(p, pt)) { await lockedMsg(groupOf(p, pt)); return; }
   const cur = pt.r ?? groupOf(p, pt).rot; pt.r = cur ? 0 : 90;
   save(); drawPlan();
 });
 $('#lblMove').addEventListener('click', async () => {
   const p = curPlan(), pt = selKey && p.points[selKey];
   if (!pt) { await uiAlert('Seleziona prima un\'etichetta.'); return; }
+  if (isLocked(p, pt)) { await lockedMsg(groupOf(p, pt)); return; }
+  if (curGroup().lock) { await lockedMsg(curGroup()); return; }
   pt.g = p.active; delete pt.r; save(); refreshGroups(); drawPlan();
 });
 $('#grpFont').innerHTML = fontOpts(false); $('#lblFont').innerHTML = fontOpts(true);
-$('#grpFont').addEventListener('change', () => { curGroup().font = $('#grpFont').value; save(); drawPlan(); });
-$('#grpTc').addEventListener('input', () => { curGroup().tc = $('#grpTc').value; save(); drawPlan(); });
-$('#grpBg').addEventListener('input', () => { curGroup().bg = $('#grpBg').value; save(); drawPlan(); });
-$('#grpStyleReset').addEventListener('click', () => { const g = curGroup(); delete g.font; delete g.tc; delete g.bg; save(); syncStyleControls(); drawPlan(); });
+$('#grpFont').addEventListener('change', () => { if (curGroup().lock) { syncStyleControls(); return; } curGroup().font = $('#grpFont').value; save(); drawPlan(); });
+$('#grpTc').addEventListener('input', () => { if (curGroup().lock) { syncStyleControls(); return; } curGroup().tc = $('#grpTc').value; save(); drawPlan(); });
+$('#grpBg').addEventListener('input', () => { if (curGroup().lock) { syncStyleControls(); return; } curGroup().bg = $('#grpBg').value; save(); drawPlan(); });
+$('#grpStyleReset').addEventListener('click', () => { const g = curGroup(); if (g.lock) return; delete g.font; delete g.tc; delete g.bg; save(); syncStyleControls(); drawPlan(); });
 // stile della singola etichetta selezionata (svincolata dal gruppo)
 async function onSel(fn) {
   const p = curPlan(), pt = selKey && p.points[selKey];
   if (!pt) { await uiAlert('Seleziona prima un\'etichetta: cliccala (col telefono attiva «Sposta etichette» e toccala).'); syncStyleControls(); return; }
+  if (isLocked(p, pt)) { await lockedMsg(groupOf(p, pt)); syncStyleControls(); return; }
   fn(pt); save(); drawPlan(); updateSel();
 }
 $('#lblSize').addEventListener('input', () => onSel(pt => { pt.sc = parseFloat($('#lblSize').value); }));
@@ -592,6 +608,7 @@ $('#lblTc').addEventListener('input', () => onSel(pt => { pt.tc = $('#lblTc').va
 $('#lblBg').addEventListener('input', () => onSel(pt => { pt.bg = $('#lblBg').value; }));
 $('#lblReset').addEventListener('click', () => onSel(pt => { ['r', 'sc', 'font', 'tc', 'bg'].forEach(k => delete pt[k]); }));
 $('#labelSize').addEventListener('input', () => {
+  if (curGroup().lock) { $('#labelSize').value = curGroup().scale; return; }
   curGroup().scale = parseFloat($('#labelSize').value);
   save(); drawPlan();
 });
@@ -600,7 +617,9 @@ $('#clearPts').addEventListener('click', async () => {
   const n = Object.keys(S.plans[piano].points).length;
   if (!n) { await uiAlert('Non ci sono etichette posizionate su questo piano.'); return; }
   if (!await uiConfirm(`Eliminare tutte le ${n} etichette di questo piano? Le assegnazioni non vengono toccate.`)) return;
-  S.plans[piano].points = {}; S.plans[piano].free = {}; selKey = null;
+  const P = S.plans[piano];
+  Object.keys(P.points).forEach(k => { if (!isLocked(P, P.points[k])) { delete P.points[k]; if (k.startsWith('f:') && P.free) delete P.free[k.slice(2)]; } });
+  selKey = null;
   save(); refreshGroups(); drawPlan();
 });
 $('#planPiano').addEventListener('change', () => {
@@ -691,13 +710,15 @@ $('#freeAdd').addEventListener('click', async () => {
 $('#freeEdit').addEventListener('click', async () => {
   const p = curPlan();
   if (!selKey || !selKey.startsWith('f:')) { await uiAlert('Seleziona prima un\'etichetta libera.'); return; }
+  if (isLocked(p, p.points[selKey])) { await lockedMsg(groupOf(p, p.points[selKey])); return; }
   const t = await uiPrompt('Modifica il testo:', p.free[selKey.slice(2)] || '');
   if (!t || !t.trim()) return;
   p.free[selKey.slice(2)] = t.trim(); save(); updateSel(); drawPlan();
 });
-$('#remPt').addEventListener('click', () => {
+$('#remPt').addEventListener('click', async () => {
   const piano = $('#planPiano').value;
   const k = selKey || $('#mapRoom').value;
+  if (S.plans[piano].points[k] && isLocked(S.plans[piano], S.plans[piano].points[k])) { await lockedMsg(groupOf(S.plans[piano], S.plans[piano].points[k])); return; }
   if (k.startsWith('f:') && S.plans[piano].free) delete S.plans[piano].free[k.slice(2)];
   delete S.plans[piano].points[k];
   selKey = null; save(); refreshGroups(); drawPlan();

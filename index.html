@@ -203,7 +203,8 @@
       <button id="grpAdd">+ Nuovo</button>
       <button id="grpRen">Rinomina</button>
       <button id="grpDel">Elimina gruppo</button>
-      <label><input type="checkbox" id="grpVis" checked> Visibile</label>
+      <button id="grpVisBtn">👁 Nascondi gruppo</button>
+      <button id="grpLockBtn">🔒 Blocca gruppo</button>
       <button id="grpRot">Ruota gruppo 90°</button>
       <label>Dimensione <input type="range" id="labelSize" min="0.4" max="3" step="0.05" value="1"></label>
       <label>Carattere <select id="grpFont"></select></label>
@@ -229,7 +230,7 @@
       <span id="freeHint" class="hint" hidden><b>Tocca il disegno per posizionare la nuova etichetta.</b></span>
       <span id="selInfo" class="hint">Nessuna etichetta selezionata.</span>
     </div>
-    <p class="hint">Scegli dall'elenco un <b>numero</b> (1–27), l'<b>etichetta</b> del locale (es. Biblioteca) o le <b>attività</b> assegnate a un'aula, poi tocca il disegno nel punto in cui metterli: sono tre elementi indipendenti. Con «+ Aggiungi etichetta» crei invece un'etichetta libera con testo a piacere (es. Ingresso), che va nel gruppo attivo. Per spostarne una già posizionata trascinala: col mouse basta farlo, sul telefono attiva prima «Sposta etichette». Ogni <b>gruppo</b> è un livello con rotazione, dimensione, carattere, colori e visibilità propri: le nuove etichette vanno nel gruppo attivo e le modifiche di gruppo toccano solo quelle. Le impostazioni della barra «Etichetta selezionata» (rotazione, dimensione, carattere, colori) valgono solo per quella etichetta, svincolata dal gruppo, finché non premi «Segui il gruppo». Le attività seguono la settimana selezionata nel tab Settimana.</p>
+    <p class="hint">Scegli dall'elenco un <b>numero</b> (1–27), l'<b>etichetta</b> del locale (es. Biblioteca) o le <b>attività</b> assegnate a un'aula, poi tocca il disegno nel punto in cui metterli: sono tre elementi indipendenti. Con «+ Aggiungi etichetta» crei invece un'etichetta libera con testo a piacere (es. Ingresso), che va nel gruppo attivo. Per spostarne una già posizionata trascinala: col mouse basta farlo, sul telefono attiva prima «Sposta etichette». Ogni <b>gruppo</b> è un livello con rotazione, dimensione, carattere, colori e visibilità propri: le nuove etichette vanno nel gruppo attivo; «Nascondi» toglie il gruppo dalla pianta (anche da PNG e PDF), «Blocca» impedisce ogni modifica a lui e alle sue etichette finché non lo sblocchi e le modifiche di gruppo toccano solo quelle. Le impostazioni della barra «Etichetta selezionata» (rotazione, dimensione, carattere, colori) valgono solo per quella etichetta, svincolata dal gruppo, finché non premi «Segui il gruppo». Le attività seguono la settimana selezionata nel tab Settimana.</p>
     <canvas id="planCanvas"></canvas>
   </section>
 
@@ -300,6 +301,6 @@
   </button>
 </nav>
 
-<script src="app.js?v=20261023c"></script>
+<script src="app.js?v=20261023d"></script>
 </body>
 </html>
