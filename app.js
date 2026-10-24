@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-10-24 · percorsi';
+const VERSION = '2026-10-24 · percorsi (snodi piccoli)';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -367,8 +367,8 @@ function strokePath(pa, W, H, handles) {
   }
   ctx.beginPath(); ctx.arc(pts[0][0], pts[0][1], lw * 1.8, 0, Math.PI * 2); ctx.fill();   // partenza
   if (handles) pts.forEach(([x, y]) => {
-    ctx.beginPath(); ctx.arc(x, y, lw * 2.6, 0, Math.PI * 2);
-    ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = '#C62828'; ctx.lineWidth = Math.max(1.5, lw / 1.5); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, lw * 1.5, 0, Math.PI * 2);   // snodi piccoli, nel colore del percorso
+    ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, lw / 3); ctx.stroke();
   });
   ctx.restore();
 }
