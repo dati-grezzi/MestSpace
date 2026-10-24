@@ -233,6 +233,15 @@
       <span id="freeHint" class="hint" hidden><b>Tocca il disegno per posizionare la nuova etichetta.</b></span>
       <span id="selInfo" class="hint">Nessuna etichetta selezionata.</span>
     </div>
+    <div class="bar" id="pdfBar">
+      <b>Stampa PDF – includi:</b>
+      <label><input type="checkbox" id="pdfHdr" checked> Intestazione con logo della scuola</label>
+      <label>Testo <input type="text" id="pdfHdrText" size="44"></label>
+      <label><input type="checkbox" id="pdfMs" checked> Logo MestSpace</label>
+      <label><input type="checkbox" id="pdfDg" checked> Powered by datigrezzi</label>
+      <label><input type="checkbox" id="pdfInfo" checked> Riga piano e settimana</label>
+      <span class="hint">«{PIANO}» nel testo diventa Piano terra / Primo piano.</span>
+    </div>
     <div class="bar" id="pathBar">
       <b>Percorsi:</b>
       <select id="pathSel"></select>
@@ -320,6 +329,6 @@
   </button>
 </nav>
 
-<script src="app.js?v=20261024c"></script>
+<script src="app.js?v=20261024d"></script>
 </body>
 </html>
