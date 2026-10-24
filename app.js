@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-10-24 · percorsi (snodi piccoli)';
+const VERSION = '2026-10-24 · allineamento testo';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -412,7 +412,7 @@ async function ensureFonts(keys) {
 }
 // stile effettivo: l'etichetta ha la precedenza sul gruppo, il gruppo sui valori predefiniti
 const styleOf = (pt, g) => ({
-  rot: (pt.r ?? g.rot) ? 1 : 0, scale: pt.sc ?? g.scale ?? 1, font: pt.font ?? g.font ?? '', tc: pt.tc ?? g.tc ?? null, bg: pt.bg ?? g.bg ?? null
+  rot: (pt.r ?? g.rot) ? 1 : 0, scale: pt.sc ?? g.scale ?? 1, font: pt.font ?? g.font ?? '', al: pt.al ?? g.al ?? 'c', tc: pt.tc ?? g.tc ?? null, bg: pt.bg ?? g.bg ?? null
 });
 function drawLabel(text, x, y, key, isNum, st, selected) {
   // la dimensione segue la larghezza del disegno, così resta leggibile anche su immagini grandi
@@ -437,8 +437,10 @@ function drawLabel(text, x, y, key, isNum, st, selected) {
   if (isNum) { ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, h / 2); ctx.fill(); if (st.bg) ctx.stroke(); }
   else { ctx.fillRect(-w / 2, -h / 2, w, h); ctx.strokeRect(-w / 2, -h / 2, w, h); }
   ctx.fillStyle = tc;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  lines.forEach((l, i) => ctx.fillText(l, 0, (i - (lines.length - 1) / 2) * lh));
+  const al = st.al || 'c', pad = fs * 0.4;   // allineamento del testo (utile con più righe)
+  ctx.textAlign = al === 'l' ? 'left' : al === 'r' ? 'right' : 'center'; ctx.textBaseline = 'middle';
+  const tx = al === 'l' ? -w / 2 + pad : al === 'r' ? w / 2 - pad : 0;
+  lines.forEach((l, i) => ctx.fillText(l, tx, (i - (lines.length - 1) / 2) * lh));
   if (selected) {
     ctx.strokeStyle = '#C62828'; ctx.lineWidth = Math.max(2, fs / 8); ctx.setLineDash([fs / 3, fs / 4]);
     ctx.strokeRect(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6);
@@ -591,13 +593,13 @@ function updateSel() {
 const fontOpts = withDefault => (withDefault ? '<option value="__g">Come il gruppo</option>' : '') + Object.entries(FONTS).map(([k, f]) => `<option value="${k}">${f.name}</option>`).join('');
 function syncStyleControls() {
   const p = curPlan(), g = curGroup(), pt = selKey && p.points[selKey];
-  $('#grpFont').value = g.font || ''; $('#grpTc').value = g.tc || '#111111'; $('#grpBg').value = g.bg || '#ffffff';
+  $('#grpFont').value = g.font || ''; $('#grpAlign').value = g.al || 'c'; $('#grpTc').value = g.tc || '#111111'; $('#grpBg').value = g.bg || '#ffffff';
   const isNum = selKey && selKey.startsWith('n:');
   const lk = !!(pt && groupOf(p, pt).lock);
-  ['lblSize', 'lblFont', 'lblTc', 'lblBg', 'lblReset', 'lblRot', 'freeEdit', 'remPt'].forEach(i => { $('#' + i).disabled = lk; });
-  if (!pt) { $('#lblSize').value = g.scale; $('#lblFont').value = '__g'; $('#lblTc').value = g.tc || '#111111'; $('#lblBg').value = g.bg || '#ffffff'; return; }
+  ['lblSize', 'lblFont', 'lblAlign', 'lblTc', 'lblBg', 'lblReset', 'lblRot', 'freeEdit', 'remPt'].forEach(i => { $('#' + i).disabled = lk; });
+  if (!pt) { $('#lblSize').value = g.scale; $('#lblFont').value = '__g'; $('#lblAlign').value = '__g'; $('#lblTc').value = g.tc || '#111111'; $('#lblBg').value = g.bg || '#ffffff'; return; }
   const st = styleOf(pt, groupOf(p, pt));
-  $('#lblSize').value = st.scale; $('#lblFont').value = pt.font === undefined ? '__g' : pt.font;
+  $('#lblSize').value = st.scale; $('#lblFont').value = pt.font === undefined ? '__g' : pt.font; $('#lblAlign').value = pt.al === undefined ? '__g' : pt.al;
   $('#lblTc').value = st.tc || (isNum ? '#ffffff' : '#111111'); $('#lblBg').value = st.bg || (isNum ? '#1f3027' : '#ffffff');
 }
 function refreshGroups() {
@@ -609,7 +611,7 @@ function refreshGroups() {
   const g = curGroup();
   $('#grpVisBtn').textContent = g.vis ? '👁 Nascondi gruppo' : '👁 Mostra gruppo';
   $('#grpLockBtn').textContent = g.lock ? '🔓 Sblocca gruppo' : '🔒 Blocca gruppo';
-  ['grpRot', 'grpFont', 'grpTc', 'grpBg', 'grpStyleReset', 'labelSize', 'grpDel'].forEach(i => { $('#' + i).disabled = !!g.lock; });
+  ['grpRot', 'grpFont', 'grpAlign', 'grpTc', 'grpBg', 'grpStyleReset', 'labelSize', 'grpDel'].forEach(i => { $('#' + i).disabled = !!g.lock; });
   $('#labelSize').value = g.scale;
   updateSel(); syncStyleControls();
 }
@@ -659,9 +661,11 @@ $('#lblMove').addEventListener('click', async () => {
 });
 $('#grpFont').innerHTML = fontOpts(false); $('#lblFont').innerHTML = fontOpts(true);
 $('#grpFont').addEventListener('change', () => { if (curGroup().lock) { syncStyleControls(); return; } curGroup().font = $('#grpFont').value; save(); drawPlan(); });
+$('#grpAlign').addEventListener('change', () => { if (curGroup().lock) { syncStyleControls(); return; } curGroup().al = $('#grpAlign').value; save(); drawPlan(); });
+$('#lblAlign').addEventListener('change', () => onSel(pt => { if ($('#lblAlign').value === '__g') delete pt.al; else pt.al = $('#lblAlign').value; }));
 $('#grpTc').addEventListener('input', () => { if (curGroup().lock) { syncStyleControls(); return; } curGroup().tc = $('#grpTc').value; save(); drawPlan(); });
 $('#grpBg').addEventListener('input', () => { if (curGroup().lock) { syncStyleControls(); return; } curGroup().bg = $('#grpBg').value; save(); drawPlan(); });
-$('#grpStyleReset').addEventListener('click', () => { const g = curGroup(); if (g.lock) return; delete g.font; delete g.tc; delete g.bg; save(); syncStyleControls(); drawPlan(); });
+$('#grpStyleReset').addEventListener('click', () => { const g = curGroup(); if (g.lock) return; delete g.font; delete g.al; delete g.tc; delete g.bg; save(); syncStyleControls(); drawPlan(); });
 // stile della singola etichetta selezionata (svincolata dal gruppo)
 async function onSel(fn) {
   const p = curPlan(), pt = selKey && p.points[selKey];
@@ -673,7 +677,7 @@ $('#lblSize').addEventListener('input', () => onSel(pt => { pt.sc = parseFloat($
 $('#lblFont').addEventListener('change', () => onSel(pt => { if ($('#lblFont').value === '__g') delete pt.font; else pt.font = $('#lblFont').value; }));
 $('#lblTc').addEventListener('input', () => onSel(pt => { pt.tc = $('#lblTc').value; }));
 $('#lblBg').addEventListener('input', () => onSel(pt => { pt.bg = $('#lblBg').value; }));
-$('#lblReset').addEventListener('click', () => onSel(pt => { ['r', 'sc', 'font', 'tc', 'bg'].forEach(k => delete pt[k]); }));
+$('#lblReset').addEventListener('click', () => onSel(pt => { ['r', 'sc', 'font', 'al', 'tc', 'bg'].forEach(k => delete pt[k]); }));
 $('#labelSize').addEventListener('input', () => {
   if (curGroup().lock) { $('#labelSize').value = curGroup().scale; return; }
   curGroup().scale = parseFloat($('#labelSize').value);
