@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-10-24 · stampe per aula';
+const VERSION = '2026-10-24 · eventi e locali';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -136,9 +136,9 @@ function dayItems(date) {
   const w = parseISO(date).getDay();
   if (!w) return [];
   const act = S.var.filter(v => v.giorno === w && v.dal <= date && (!v.al || v.al >= date));
-  const over = new Set(act.map(v => v.roomId));
+  // una variazione sostituisce l'orario tipo della stessa aula solo negli orari che si sovrappongono
   return [
-    ...S.std.filter(a => a.giorno === w && !over.has(a.roomId)).map(a => ({ ...a, date, src: 'std' })),
+    ...S.std.filter(a => a.giorno === w && !act.some(v => v.roomId === a.roomId && overlap(v, a))).map(a => ({ ...a, date, src: 'std' })),
     ...act.map(a => ({ ...a, date, src: 'var' }))
   ];
 }
@@ -1209,21 +1209,26 @@ $('#roomsCsv').addEventListener('click', () => {
 });
 
 /* ---------- scheda Assegnazioni: importa da file + modello ---------- */
-const ASS_HEAD = ['numero', 'attivita', 'assegnazione', 'giorno', 'dalle', 'alle', 'dal', 'al', 'docente'];
+const ASS_HEAD = ['numero', 'attivita', 'assegnazione', 'giorno', 'dalle', 'alle', 'dal', 'al', 'docente', 'etichetta', 'piano'];
 const ASS_EX = [
-  [1, 'Corso di lettura', 'fissa', '', '', '', '', '', ''],
-  [3, 'Programmazione primari', 'temporanea', 'Martedì', '16:00', '18:00', '', '', ''],
-  [5, 'Laboratorio teatro', 'temporanea', 'Giovedì', '15:00', '17:00', '2026-11-03', '2026-12-18', 'Rossi']];
+  [1, 'Corso di lettura', 'fissa', '', '', '', '', '', '', '', ''],
+  [3, 'Programmazione primari', 'temporanea', 'Martedì', '16:00', '18:00', '', '', '', '', ''],
+  [5, 'Laboratorio teatro', 'temporanea', 'Giovedì', '15:00', '17:00', '2026-11-03', '2026-12-18', 'Rossi', '', '']];
 function importAss(rows, replace) {
   const head = rows[0].map(h => HDR[String(h).trim().toLowerCase().normalize('NFD').replace(/[^a-z]/g, '')] || '');
-  if (!head.includes('numero') || !head.includes('attivita') || !head.includes('assegnazione')) throw new Error('servono le colonne «numero», «attivita» e «assegnazione» (usa il modello)');
+  if (!(head.includes('numero') || head.includes('nome')) || !head.includes('attivita') || !head.includes('assegnazione')) throw new Error('servono le colonne «numero», «attivita» e «assegnazione» (usa il modello)');
   const perm = replace ? [] : [...S.perm], std = replace ? [] : [...S.std], vr = replace ? [] : [...S.var];
   const same = (x, y) => x.roomId === y.roomId && x.etichetta === y.etichetta && (x.giorno || 0) === (y.giorno || 0) && (x.dalle || '') === (y.dalle || '') && (x.alle || '') === (y.alle || '') && (x.dal || '') === (y.dal || '');
-  let nP = 0, nT = 0, dup = 0; const skip = [];
+  let nP = 0, nT = 0, dup = 0, nNew = 0; const skip = [];
   rows.slice(1).forEach((r, idx) => {
     const o = {}; head.forEach((k, i) => { if (k) o[k] = String(r[i] ?? '').trim(); });
     if (!o.numero && !o.attivita) return;
-    const rm = S.rooms.find(x => x.numero === numOrNull(o.numero));
+    const nn = numOrNull(o.numero);
+    let rm = nn != null ? S.rooms.find(x => x.numero === nn) : null;
+    if (!rm && nn == null && o.nome) {   // locale senza numero: si cerca per etichetta, altrimenti lo si crea (piano indicato, default terra)
+      rm = S.rooms.find(x => x.nome.toLowerCase() === o.nome.toLowerCase());
+      if (!rm) { const pn = normPiano(o.piano) || 'terra'; rm = { id: roomKey(pn, null, o.nome), piano: pn, numero: null, nome: o.nome, tipo: '', note: '', cap: null, mq: null }; S.rooms.push(rm); nNew++; }
+    }
     const t = o.assegnazione.toLowerCase();
     if (!rm || !o.attivita) { skip.push(`${idx + 2} (aula/attività)`); return; }
     const base = { id: uid(), roomId: rm.id, etichetta: o.attivita, tipo: rm.tipo === 'classe' ? 'classe' : 'attivita', docente: o.docente || '', note: '' };
@@ -1238,7 +1243,7 @@ function importAss(rows, replace) {
     } else skip.push(`${idx + 2} (assegnazione: fissa o temporanea)`);
   });
   S.perm = perm; S.std = std; S.var = vr; save(); renderAll();
-  return { nP, nT, dup, skip };
+  return { nP, nT, dup, skip, nNew };
 }
 $('#assFile').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
@@ -1253,7 +1258,7 @@ $('#assFile').addEventListener('change', async e => {
     const replace = $('#assImpMode').value === 'replace';
     if (replace && (S.perm.length || S.std.length || S.var.length) && !await uiConfirm('Le assegnazioni del file sostituiranno tutte quelle attuali. Continuare?')) { e.target.value = ''; return; }
     const r = importAss(rows, replace);
-    await uiAlert(`Importate: ${r.nP} fisse, ${r.nT} temporanee.` + (r.dup ? ` Duplicati saltati: ${r.dup}.` : '') + (r.skip.length ? ` Righe ignorate: ${r.skip.join(', ')}.` : ''));
+    await uiAlert(`Importate: ${r.nP} fisse, ${r.nT} temporanee.` + (r.nNew ? ` Locali nuovi creati: ${r.nNew}.` : '') + (r.dup ? ` Duplicati saltati: ${r.dup}.` : '') + (r.skip.length ? ` Righe ignorate: ${r.skip.join(', ')}.` : ''));
   } catch (err) { await uiAlert('Importazione non riuscita: ' + err.message); }
   e.target.value = '';
 });
@@ -1261,7 +1266,7 @@ $('#assModel').addEventListener('click', async () => {
   try {
     const X = await loadXlsx(), wb = X.utils.book_new();
     const s1 = X.utils.aoa_to_sheet([ASS_HEAD, ...ASS_EX]);
-    s1['!cols'] = [8, 28, 14, 12, 8, 8, 12, 12, 16].map(w => ({ wch: w }));
+    s1['!cols'] = [8, 28, 14, 12, 8, 8, 12, 12, 16, 22, 8].map(w => ({ wch: w }));
     X.utils.book_append_sheet(wb, s1, 'Assegnazioni');
     const s2 = X.utils.aoa_to_sheet([['numero', 'etichetta', 'piano', 'tipo'], ...S.rooms.map(r => [r.numero ?? '', r.nome, r.piano, r.tipo || ''])]);
     s2['!cols'] = [8, 28, 8, 14].map(w => ({ wch: w }));
@@ -1273,7 +1278,8 @@ $('#assModel').addEventListener('click', async () => {
       ['giorno', 'Solo temporanee: Lunedì … Sabato (anche Lun, Mar…, oppure 1–6)'],
       ['dalle / alle', 'Solo temporanee: orari HH:MM, es. 16:00 e 18:00'],
       ['dal / al', 'Facoltative: periodo di validità, formato AAAA-MM-GG (es. 2026-11-03) o GG/MM/AAAA'],
-      ['docente', 'Facoltativo'], [''],
+      ['docente', 'Facoltativo'],
+      ['etichetta / piano', 'Solo per locali senza numero (es. Auditorium): lascia vuoto «numero», scrivi l\'etichetta e il piano (terra/primo); se il locale non esiste viene creato'], [''],
       ['Le righe di esempio nel foglio «Assegnazioni» vanno cancellate o sostituite.']];
     const s3 = X.utils.aoa_to_sheet(ist); s3['!cols'] = [{ wch: 16 }, { wch: 90 }];
     X.utils.book_append_sheet(wb, s3, 'Istruzioni');
