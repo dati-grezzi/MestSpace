@@ -164,6 +164,23 @@
   </section>
 
   <section id="tab-assegnazioni" hidden>
+    <details class="tool" data-k="impass">
+      <summary>📥 Importa da file</summary>
+      <div class="bar">
+        <button id="assModel">Scarica modello (Excel)</button>
+        <button id="assModelCsv">Modello CSV</button>
+      </div>
+      <div class="bar">
+        <label>Modalità
+          <select id="assImpMode">
+            <option value="add">Aggiungi a quelle esistenti</option>
+            <option value="replace">Sostituisci tutte le assegnazioni</option>
+          </select>
+        </label>
+        <label>File (Excel o CSV) <input type="file" id="assFile" accept=".csv,.xlsx,.xls,text/csv"></label>
+      </div>
+      <p class="hint">Compila il modello: una riga per assegnazione, riferita al <b>numero</b> dell'aula (1–27). Colonne: <b>attività</b>, <b>assegnazione</b> (<i>fissa</i> oppure <i>temporanea</i>), e per le temporanee <b>giorno</b>, <b>dalle</b>, <b>alle</b> (facoltativi <b>dal</b>/<b>al</b> per un periodo), <b>docente</b> facoltativo. Il foglio «Aule» del modello elenca numeri ed etichette. In modalità «Aggiungi» i duplicati vengono saltati.</p>
+    </details>
     <form id="formAss" class="card">
       <label>Modalità
         <select name="modo">
@@ -361,6 +378,6 @@
   </button>
 </nav>
 
-<script src="app.js?v=20261024e"></script>
+<script src="app.js?v=20261024f"></script>
 </body>
 </html>

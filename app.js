@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-10-24 · menu a scomparsa';
+const VERSION = '2026-10-24 · importa assegnazioni';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -1205,6 +1205,85 @@ $('#roomsCsv').addEventListener('click', () => {
   const el = document.createElement('a');
   el.href = URL.createObjectURL(new Blob(['\uFEFF' + out.map(r => r.map(q).join(';')).join('\n')], { type: 'text/csv;charset=utf-8' }));
   el.download = 'aule-e-assegnazioni.csv'; el.click();
+});
+
+/* ---------- scheda Assegnazioni: importa da file + modello ---------- */
+const ASS_HEAD = ['numero', 'attivita', 'assegnazione', 'giorno', 'dalle', 'alle', 'dal', 'al', 'docente'];
+const ASS_EX = [
+  [1, 'Corso di lettura', 'fissa', '', '', '', '', '', ''],
+  [3, 'Programmazione primari', 'temporanea', 'Martedì', '16:00', '18:00', '', '', ''],
+  [5, 'Laboratorio teatro', 'temporanea', 'Giovedì', '15:00', '17:00', '2026-11-03', '2026-12-18', 'Rossi']];
+function importAss(rows, replace) {
+  const head = rows[0].map(h => HDR[String(h).trim().toLowerCase().normalize('NFD').replace(/[^a-z]/g, '')] || '');
+  if (!head.includes('numero') || !head.includes('attivita') || !head.includes('assegnazione')) throw new Error('servono le colonne «numero», «attivita» e «assegnazione» (usa il modello)');
+  const perm = replace ? [] : [...S.perm], std = replace ? [] : [...S.std], vr = replace ? [] : [...S.var];
+  const same = (x, y) => x.roomId === y.roomId && x.etichetta === y.etichetta && (x.giorno || 0) === (y.giorno || 0) && (x.dalle || '') === (y.dalle || '') && (x.alle || '') === (y.alle || '') && (x.dal || '') === (y.dal || '');
+  let nP = 0, nT = 0, dup = 0; const skip = [];
+  rows.slice(1).forEach((r, idx) => {
+    const o = {}; head.forEach((k, i) => { if (k) o[k] = String(r[i] ?? '').trim(); });
+    if (!o.numero && !o.attivita) return;
+    const rm = S.rooms.find(x => x.numero === numOrNull(o.numero));
+    const t = o.assegnazione.toLowerCase();
+    if (!rm || !o.attivita) { skip.push(`${idx + 2} (aula/attività)`); return; }
+    const base = { id: uid(), roomId: rm.id, etichetta: o.attivita, tipo: rm.tipo === 'classe' ? 'classe' : 'attivita', docente: o.docente || '', note: '' };
+    if (/^fiss/.test(t)) { if (perm.some(x => same(x, base))) { dup++; return; } perm.push(base); nP++; }
+    else if (/^temp/.test(t)) {
+      const g = toGiorno(o.giorno), d = toHHMM(o.dalle), al = toHHMM(o.alle);
+      if (!g || !d || !al || toMin(al) <= toMin(d)) { skip.push(`${idx + 2} (giorno/orari)`); return; }
+      const x = { ...base, giorno: g, dalle: d, alle: al }, dal = toISODate(o.dal), fine = toISODate(o.al);
+      const list = dal ? vr : std; if (dal) { x.dal = dal; x.al = fine || null; }
+      if (list.some(y => same(y, x))) { dup++; return; }
+      list.push(x); nT++;
+    } else skip.push(`${idx + 2} (assegnazione: fissa o temporanea)`);
+  });
+  S.perm = perm; S.std = std; S.var = vr; save(); renderAll();
+  return { nP, nT, dup, skip };
+}
+$('#assFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    let rows;
+    if (/\.xlsx?$/i.test(f.name)) {
+      const X = await loadXlsx(), wb = X.read(await f.arrayBuffer());
+      const nm = wb.SheetNames.find(n => /assegn/i.test(n)) || wb.SheetNames[0];
+      rows = X.utils.sheet_to_json(wb.Sheets[nm], { header: 1, defval: '' });
+    } else rows = parseCSV(await f.text());
+    if (!rows.length) throw new Error('file vuoto');
+    const replace = $('#assImpMode').value === 'replace';
+    if (replace && (S.perm.length || S.std.length || S.var.length) && !await uiConfirm('Le assegnazioni del file sostituiranno tutte quelle attuali. Continuare?')) { e.target.value = ''; return; }
+    const r = importAss(rows, replace);
+    await uiAlert(`Importate: ${r.nP} fisse, ${r.nT} temporanee.` + (r.dup ? ` Duplicati saltati: ${r.dup}.` : '') + (r.skip.length ? ` Righe ignorate: ${r.skip.join(', ')}.` : ''));
+  } catch (err) { await uiAlert('Importazione non riuscita: ' + err.message); }
+  e.target.value = '';
+});
+$('#assModel').addEventListener('click', async () => {
+  try {
+    const X = await loadXlsx(), wb = X.utils.book_new();
+    const s1 = X.utils.aoa_to_sheet([ASS_HEAD, ...ASS_EX]);
+    s1['!cols'] = [8, 28, 14, 12, 8, 8, 12, 12, 16].map(w => ({ wch: w }));
+    X.utils.book_append_sheet(wb, s1, 'Assegnazioni');
+    const s2 = X.utils.aoa_to_sheet([['numero', 'etichetta', 'piano', 'tipo'], ...S.rooms.map(r => [r.numero ?? '', r.nome, r.piano, r.tipo || ''])]);
+    s2['!cols'] = [8, 28, 8, 14].map(w => ({ wch: w }));
+    X.utils.book_append_sheet(wb, s2, 'Aule');
+    const ist = [['Come compilare il foglio «Assegnazioni»'], [''],
+      ['numero', "Numero dell'aula (vedi foglio «Aule»). È la chiave: l'assegnazione va sempre per numero."],
+      ['attivita', 'Cosa si svolge: 3A, Corso KET, Programmazione primari…'],
+      ['assegnazione', '«fissa» = permanente (giorno e orari vuoti); «temporanea» = ricorrente in un giorno/orario'],
+      ['giorno', 'Solo temporanee: Lunedì … Sabato (anche Lun, Mar…, oppure 1–6)'],
+      ['dalle / alle', 'Solo temporanee: orari HH:MM, es. 16:00 e 18:00'],
+      ['dal / al', 'Facoltative: periodo di validità, formato AAAA-MM-GG (es. 2026-11-03) o GG/MM/AAAA'],
+      ['docente', 'Facoltativo'], [''],
+      ['Le righe di esempio nel foglio «Assegnazioni» vanno cancellate o sostituite.']];
+    const s3 = X.utils.aoa_to_sheet(ist); s3['!cols'] = [{ wch: 16 }, { wch: 90 }];
+    X.utils.book_append_sheet(wb, s3, 'Istruzioni');
+    X.writeFile(wb, 'modello-assegnazioni.xlsx');
+  } catch (err) { await uiAlert('Modello non creato: ' + err.message + '. Usa «Modello CSV».'); }
+});
+$('#assModelCsv').addEventListener('click', () => {
+  const q = s => `"${String(s ?? '').replace(/"/g, '""')}"`;
+  const el = document.createElement('a');
+  el.href = URL.createObjectURL(new Blob(['﻿' + [ASS_HEAD, ...ASS_EX].map(r => r.map(q).join(';')).join('\n')], { type: 'text/csv;charset=utf-8' }));
+  el.download = 'modello-assegnazioni.csv'; el.click();
 });
 
 /* ---------- sezioni a scomparsa della scheda Planimetrie (stato ricordato) ---------- */
