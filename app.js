@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-10-23 · PDF con loghi';
+const VERSION = '2026-10-24 · percorsi';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -336,6 +336,55 @@ function labelFor(r, mon) {
   const txt = [...new Set([...permOf(r.id).map(p => p.etichetta), ...its.map(i => i.etichetta)])].join(' / ');
   return txt;   // solo attività assegnate (numero ed etichetta del locale sono elementi separati)
 }
+/* ---------- percorsi: spezzate tratteggiate con frecce ---------- */
+let drawingPath = null;   // percorso in costruzione (punto per punto)
+let selPath = null;       // id del percorso selezionato
+const pathsOf = p => (p.paths = p.paths || []);
+function arrowHead(x1, y1, x2, y2, sz) {
+  const a = Math.atan2(y2 - y1, x2 - x1);
+  ctx.beginPath(); ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - sz * Math.cos(a - 0.45), y2 - sz * Math.sin(a - 0.45));
+  ctx.lineTo(x2 - sz * Math.cos(a + 0.45), y2 - sz * Math.sin(a + 0.45));
+  ctx.closePath(); ctx.fill();
+}
+function strokePath(pa, W, H, handles) {
+  const pts = pa.pts.map(q => [q.x * W, q.y * H]);
+  if (!pts.length) return;
+  const lw = Math.max(2, W / 320) * (pa.w || 1), col = pa.color || '#C62828', sz = lw * 4.5;
+  ctx.save();
+  ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.setLineDash(pa.dash === false ? [] : [lw * 3, lw * 2.2]);
+  ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+  ctx.setLineDash([]);
+  if (pts.length > 1) {
+    if (pa.arrow === 'tratti') for (let i = 1; i < pts.length; i++) {
+      const [x1, y1] = pts[i - 1], [x2, y2] = pts[i], L = Math.hypot(x2 - x1, y2 - y1);
+      if (L < sz * 4) continue;
+      const ux = (x2 - x1) / L, uy = (y2 - y1) / L, mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+      arrowHead(mx - ux * sz / 2, my - uy * sz / 2, mx + ux * sz / 2, my + uy * sz / 2, sz);
+    }
+    if (pa.arrow !== 'nessuna') { const [x1, y1] = pts[pts.length - 2], [x2, y2] = pts[pts.length - 1]; arrowHead(x1, y1, x2, y2, sz * 1.4); }
+  }
+  ctx.beginPath(); ctx.arc(pts[0][0], pts[0][1], lw * 1.8, 0, Math.PI * 2); ctx.fill();   // partenza
+  if (handles) pts.forEach(([x, y]) => {
+    ctx.beginPath(); ctx.arc(x, y, lw * 2.6, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = '#C62828'; ctx.lineWidth = Math.max(1.5, lw / 1.5); ctx.stroke();
+  });
+  ctx.restore();
+}
+function drawPaths(p, W, H) {
+  if (!$('#showPaths').checked) return;
+  pathsOf(p).forEach(pa => {
+    const g = groupOf(p, pa); if (!g.vis) return;
+    strokePath(pa, W, H, !exporting && (pa.id === selPath || pa === drawingPath));
+  });
+}
+const vertexAt = (p, pt) => {   // vertice del percorso selezionato sotto il punto
+  const pa = pathsOf(p).find(x => x.id === selPath); if (!pa || !groupOf(p, pa).vis) return null;
+  const r = Math.max(16, canvas.width / 90);
+  for (let i = pa.pts.length - 1; i >= 0; i--) if (Math.hypot(pa.pts[i].x * canvas.width - pt.x, pa.pts[i].y * canvas.height - pt.y) <= r) return { pa, i };
+  return null;
+};
 let labelBoxes = [];
 let exporting = false;   // rettangoli delle etichette disegnate, per trascinarle
 // gruppi (livelli) di etichette per piano: ciascuno con rotazione, dimensione e visibilità proprie
@@ -425,6 +474,7 @@ async function drawPlan() {
 
   const mon = mondayOf(weekDate);
   const showLabels = $('#showLabels').checked;
+  drawPaths(p, W, H);
   labelBoxes = [];
   const showNums = $('#showNums').checked;
   grpsOf(piano);
@@ -462,10 +512,22 @@ const canvasXY = e => {
 };
 const labelAt = p => [...labelBoxes].reverse().find(b => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h);
 canvas.addEventListener('pointerdown', async e => {
-  if (!canvas.width || !Object.keys(S.plans[$('#planPiano').value].points).length && $('#moveMode').checked && !pendingFree) return;
+  if (!canvas.width || canvas.width < 700) return;
   const p = canvasXY(e);
   const piano = $('#planPiano').value;
   const move = $('#moveMode').checked;
+  if (drawingPath) {   // costruzione di un percorso: ogni tocco aggiunge un punto
+    drawingPath.pts.push({ x: p.x / canvas.width, y: p.y / canvas.height });
+    drawPlan(); $('#pathInfo').textContent = `Punti: ${drawingPath.pts.length}. Tocca per aggiungerne, poi «Fine».`;
+    e.preventDefault(); return;
+  }
+  const vx = vertexAt(S.plans[piano], p);   // vertici del percorso selezionato: trascinabili (mouse sempre, touch in «Sposta»)
+  if (vx && (move || e.pointerType === 'mouse')) {
+    if (groupOf(S.plans[piano], vx.pa).lock) { await lockedMsg(groupOf(S.plans[piano], vx.pa)); return; }
+    drag = { vtx: true, pa: vx.pa, i: vx.i, piano, id: e.pointerId };
+    canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing'; e.preventDefault(); return;
+  }
+  if (!Object.keys(S.plans[piano].points).length && move && !pendingFree) return;
   // col mouse si trascina sempre; sul touch serve la modalità "Sposta etichette"
   const b = (move || e.pointerType === 'mouse') ? labelAt(p) : null;
   if (b) {
@@ -493,10 +555,11 @@ canvas.addEventListener('pointerdown', async e => {
 canvas.addEventListener('pointermove', e => {
   const p = canvasXY(e);
   if (!drag) {
-    if (e.pointerType === 'mouse') canvas.style.cursor = labelAt(p) ? 'grab' : 'crosshair';
+    if (e.pointerType === 'mouse') canvas.style.cursor = (labelAt(p) || vertexAt(curPlan(), p)) ? 'grab' : 'crosshair';
     return;
   }
   if (e.pointerId !== drag.id) return;
+  if (drag.vtx) { drag.pa.pts[drag.i] = { x: Math.min(1, Math.max(0, p.x / canvas.width)), y: Math.min(1, Math.max(0, p.y / canvas.height)) }; drawPlan(); return; }
   const x = Math.min(1, Math.max(0, (p.x - drag.dx) / canvas.width));
   const y = Math.min(1, Math.max(0, (p.y - drag.dy) / canvas.height));
   Object.assign(S.plans[drag.piano].points[drag.rid], { x, y });
@@ -567,6 +630,7 @@ $('#grpDel').addEventListener('click', async () => {
   const ids = Object.keys(p.points).filter(k => groupOf(p, p.points[k]).id === g.id);
   if (!await uiConfirm(`Eliminare il gruppo «${g.name}» e le sue ${ids.length} etichette?`)) return;
   ids.forEach(k => delete p.points[k]);
+  p.paths = pathsOf(p).filter(x => groupOf(p, x).id !== g.id);
   if (p.groups.length > 1) p.groups = p.groups.filter(x => x.id !== g.id);
   p.active = p.groups[0].id; selKey = null; save(); refreshGroups(); drawPlan();
 });
@@ -626,7 +690,7 @@ $('#clearPts').addEventListener('click', async () => {
   save(); refreshGroups(); drawPlan();
 });
 $('#planPiano').addEventListener('change', () => {
-  img = null; fillMapRooms(); selKey = null; refreshGroups();
+  img = null; fillMapRooms(); selKey = null; selPath = null; drawingPath = null; refreshGroups(); refreshPaths();
   $('#pdfPage').value = $('#planPiano').value === 'primo' ? 2 : 1;
   drawPlan();
 });
@@ -703,6 +767,66 @@ $('#rotBtn').addEventListener('click', () => {
   S.plans[piano].rot = ((S.plans[piano].rot || 0) + 90) % 360;
   save(); drawPlan();
 });
+function refreshPaths() {
+  const p = curPlan(), L = pathsOf(p);
+  $('#pathSel').innerHTML = L.length ? L.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('') : '<option value="">(nessun percorso)</option>';
+  if (!L.some(x => x.id === selPath)) selPath = L.length ? L[L.length - 1].id : null;
+  $('#pathSel').value = selPath || '';
+  const pa = L.find(x => x.id === selPath);
+  if (pa) { $('#pathColor').value = pa.color || '#C62828'; $('#pathDash').checked = pa.dash !== false; $('#pathArrow').value = pa.arrow || 'fine'; $('#pathWidth').value = pa.w || 1; }
+  const dr = !!drawingPath;
+  ['pathEnd', 'pathUndo', 'pathCancel'].forEach(i => { $('#' + i).hidden = !dr; });
+  ['pathNew', 'pathRen', 'pathDel', 'pathSel'].forEach(i => { $('#' + i).disabled = dr; });
+  if (!dr) $('#pathInfo').textContent = pa ? `${pa.pts.length} punti · ${groupOf(p, pa).name}${groupOf(p, pa).lock ? ' 🔒' : ''}. Trascina i vertici per correggere.` : '';
+}
+async function pathEdit(fn) {   // modifica del percorso selezionato (rispetta il blocco del gruppo)
+  const p = curPlan(), pa = pathsOf(p).find(x => x.id === selPath);
+  if (!pa) { await uiAlert('Seleziona o crea prima un percorso.'); return; }
+  if (groupOf(p, pa).lock) { await lockedMsg(groupOf(p, pa)); refreshPaths(); return; }
+  fn(pa); save(); drawPlan(); refreshPaths();
+}
+$('#pathNew').addEventListener('click', async () => {
+  const p = curPlan(); grpsOf($('#planPiano').value);
+  if (curGroup().lock) { await lockedMsg(curGroup()); return; }
+  const name = await uiPrompt('Nome del percorso (es. Ingresso → Aula 5, Uscita di emergenza):', 'Percorso ' + (pathsOf(p).length + 1));
+  if (!name || !name.trim()) return;
+  const last = pathsOf(p)[pathsOf(p).length - 1];
+  const pa = { id: uid(), name: name.trim(), pts: [], color: last?.color || '#C62828', dash: true, arrow: 'fine', w: 1, g: p.active };
+  p.paths.push(pa); drawingPath = pa; selPath = pa.id;
+  $('#showPaths').checked = true;
+  refreshPaths(); $('#pathInfo').textContent = 'Tocca la pianta per segnare i punti del percorso, poi «Fine».';
+});
+const finishPath = async () => {
+  const pa = drawingPath; if (!pa) return;
+  if (pa.pts.length < 2) { await uiAlert('Servono almeno due punti: percorso scartato.'); cancelPath(); return; }
+  drawingPath = null; save(); drawPlan(); refreshPaths();
+};
+const cancelPath = () => {
+  if (!drawingPath) return;
+  const p = curPlan(); p.paths = p.paths.filter(x => x !== drawingPath); drawingPath = null; selPath = null;
+  save(); drawPlan(); refreshPaths();
+};
+$('#pathEnd').addEventListener('click', finishPath);
+$('#pathCancel').addEventListener('click', cancelPath);
+$('#pathUndo').addEventListener('click', () => { if (drawingPath) { drawingPath.pts.pop(); drawPlan(); $('#pathInfo').textContent = `Punti: ${drawingPath.pts.length}.`; } });
+canvas.addEventListener('dblclick', () => { if (drawingPath) { drawingPath.pts.pop(); finishPath(); } });   // il doppio clic aggiunge un punto doppio: lo tolgo
+$('#pathSel').addEventListener('change', () => { selPath = $('#pathSel').value || null; refreshPaths(); drawPlan(); });
+$('#pathColor').addEventListener('input', () => pathEdit(pa => { pa.color = $('#pathColor').value; }));
+$('#pathDash').addEventListener('change', () => pathEdit(pa => { pa.dash = $('#pathDash').checked; }));
+$('#pathArrow').addEventListener('change', () => pathEdit(pa => { pa.arrow = $('#pathArrow').value; }));
+$('#pathWidth').addEventListener('input', () => pathEdit(pa => { pa.w = parseFloat($('#pathWidth').value); }));
+$('#pathRen').addEventListener('click', async () => {
+  const p = curPlan(), pa = pathsOf(p).find(x => x.id === selPath); if (!pa) return;
+  const n = await uiPrompt('Nuovo nome del percorso:', pa.name); if (!n || !n.trim()) return;
+  pathEdit(x => { x.name = n.trim(); });
+});
+$('#pathDel').addEventListener('click', async () => {
+  const p = curPlan(), pa = pathsOf(p).find(x => x.id === selPath); if (!pa) return;
+  if (groupOf(p, pa).lock) { await lockedMsg(groupOf(p, pa)); return; }
+  if (!await uiConfirm(`Eliminare il percorso «${pa.name}»?`)) return;
+  p.paths = p.paths.filter(x => x !== pa); selPath = null; save(); drawPlan(); refreshPaths();
+});
+$('#showPaths').addEventListener('change', drawPlan);
 $('#freeAdd').addEventListener('click', async () => {
   const piano = $('#planPiano').value, p = S.plans[piano];
   const t = await uiPromptMulti('Testo della nuova etichetta. Premi Invio per andare a capo su più righe (Ctrl+Invio per confermare):', '');
@@ -1047,6 +1171,7 @@ updateModo();
 fillRoomSelects();
 fillMapRooms();
 refreshGroups();
+refreshPaths();
 renderAll();
 $('#planPiano').value = 'terra';
 fillMapRooms();
