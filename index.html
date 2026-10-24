@@ -93,6 +93,17 @@
   .report td.cap{color:#C62828;font-weight:700;text-align:center}
   #reportHead h2{margin:0 0 4px;font-family:'Zilla Slab',Georgia,serif;font-size:20px}
   @page report{size:A4 portrait;margin:12mm}
+  #printArea{display:none}
+  .pa h2{font-family:'Zilla Slab',Georgia,serif;margin:0 0 2px}
+  .pa .psub{margin:0 0 8px;color:var(--ink-soft,#555)}
+  .pa{display:flex;flex-direction:column;min-height:274mm}
+  .pa .phdr{width:100%;display:block;margin-bottom:4mm}
+  .pa-aula .ev{font-size:17px;padding:7px 9px}
+  .pa-aula table.grid td{height:150mm}
+  .pa .pfoot{margin-top:auto;padding-top:4mm;display:flex;align-items:center;justify-content:space-between;gap:8mm;font-size:12px;color:#444}
+  .pa .pfoot img{height:8mm;display:block}
+  .pa .pfoot .l,.pa .pfoot .r{display:flex;align-items:center;gap:3mm;flex:0 0 auto}
+  .pa .pfix{margin:6px 0}
   body.big{font-size:17px}
   body.big .ev{font-size:15px}
   body.big table.grid th{font-size:15px}
@@ -118,6 +129,10 @@
     header,nav,.bar,#conflicts,form,#tab-assegnazioni,#tab-planimetrie,#tab-impostazioni,#tab-report{display:none!important}
     main{padding:0;max-width:none}
     #tab-settimana{display:block!important}
+    body.print-sett #tab-settimana,body.print-sett #tab-report{display:none!important}
+    body.print-sett #printArea{display:block!important}
+    .pa{break-after:page}.pa:last-child{break-after:auto}
+    .pa table.grid td{min-width:0}
     body.print-report #tab-settimana{display:none!important}
     body.print-report #tab-report{display:block!important;page:report}
     body.print-report #tab-report .bar{display:none!important}
@@ -155,8 +170,33 @@
         <option value="terra">Piano terra</option>
         <option value="primo">Primo piano</option>
       </select>
-      <button class="primary" onclick="window.print()">Stampa / PDF</button>
     </div>
+    <details class="tool" data-k="stampa">
+      <summary>🖨 Stampa / PDF</summary>
+      <div class="bar">
+        <label>Cosa
+          <select id="prtScope">
+            <option value="piano">Piano selezionato (una tabella)</option>
+            <option value="aula">Una sola aula</option>
+            <option value="tutte">Tutte le aule del piano (una pagina ciascuna)</option>
+          </select>
+        </label>
+        <label id="prtRoomL">Aula <select id="prtRoom"></select></label>
+        <label>Settimana
+          <select id="prtWeek">
+            <option value="cur">Corrente (con variazioni)</option>
+            <option value="gen">Generica (orario tipo)</option>
+          </select>
+        </label>
+      </div>
+      <div class="bar">
+        <label><input type="checkbox" id="prtLeg" checked> Legenda</label>
+        <label><input type="checkbox" id="prtDoc" checked> Docenti</label>
+        <label><input type="checkbox" id="prtOnly" checked> Solo aule con assegnazioni</label>
+        <button class="primary" id="prtGo">Stampa / PDF</button>
+      </div>
+      <p class="hint">«Corrente» usa la settimana scelta qui sopra, variazioni comprese; «Generica» stampa l'orario tipo, senza date né variazioni. Nel dialogo di stampa scegli «Salva come PDF».</p>
+    </details>
     <div id="conflicts"></div>
     <div id="dayTabs" hidden></div>
     <div id="grid"></div>
@@ -208,6 +248,8 @@
     </form>
     <div id="listAss"></div>
   </section>
+
+  <div id="printArea"></div>
 
   <section id="tab-planimetrie" hidden>
     <details class="tool" data-k="pianta" open>
@@ -378,6 +420,6 @@
   </button>
 </nav>
 
-<script src="app.js?v=20261024f"></script>
+<script src="app.js?v=20261024g"></script>
 </body>
 </html>

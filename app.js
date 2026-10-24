@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-10-24 · importa assegnazioni';
+const VERSION = '2026-10-24 · stampe per aula';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -224,6 +224,7 @@ function renderGrid() {
 function fillRoomSelects() {
   const opts = S.rooms.map(r => `<option value="${r.id}">${esc(r.numero != null ? r.numero : r.nome + ' (' + r.piano + ')')}</option>`).join('');
   $('#fRoom').innerHTML = opts;
+  const pr = $('#prtRoom'), pv = pr.value; pr.innerHTML = opts; if (pv) pr.value = pv;
   $('#fRoomName').value = rNome($('#fRoom').value);
 }
 $('#fRoom').addEventListener('change', () => { $('#fRoomName').value = rNome($('#fRoom').value); });
@@ -1067,7 +1068,7 @@ $('#repPrint').addEventListener('click', () => {
   document.body.classList.add('print-report');
   window.print();
 });
-window.addEventListener('afterprint', () => document.body.classList.remove('print-report'));
+window.addEventListener('afterprint', () => { document.body.classList.remove('print-report'); document.body.classList.remove('print-sett'); });
 $('#repCsv').addEventListener('click', () => {
   const { mon, rows } = reportData();
   const q = s => `"${String(s ?? '').replace(/"/g, '""')}"`;
@@ -1286,6 +1287,71 @@ $('#assModelCsv').addEventListener('click', () => {
   el.download = 'modello-assegnazioni.csv'; el.click();
 });
 
+/* ---------- stampa Settimana: piano / singola aula / tutte, corrente o generica ---------- */
+const fmt = s => { const d = parseISO(s); return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`; };
+const DAYF = ['', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
+function prtItems(gen) {
+  if (gen) return S.std.map(a => ({ ...a, src: 'std', g: a.giorno }));
+  return weekItems(mondayOf(weekDate)).map(i => ({ ...i, g: parseISO(i.date).getDay() }));
+}
+function prtEv(i, doc) {
+  return `<div class="ev ${i.src}" style="background:${colorOf(i.etichetta)}"><b>${i.dalle}–${i.alle}</b> ${esc(i.etichetta)}` +
+    (S.corta.includes(i.etichetta) ? ' <i>(corta)</i>' : '') + (i.src === 'var' ? ' <span class="vtag">var.</span>' : '') +
+    (doc && i.docente ? `<br><small>${esc(i.docente)}</small>` : '') + '</div>';
+}
+async function buildPrint() {
+  const scope = $('#prtScope').value, gen = $('#prtWeek').value === 'gen', leg = $('#prtLeg').checked, doc = $('#prtDoc').checked, only = $('#prtOnly').checked;
+  const mon = mondayOf(weekDate), items = prtItems(gen), piano = $('#pianoSel').value;
+  const heads = [1, 2, 3, 4, 5, 6].map(g => gen ? DAYF[g] : `${DAYS[g]} ${parseISO(addDays(mon, g - 1)).getDate()}/${parseISO(addDays(mon, g - 1)).getMonth() + 1}`);
+  const sub = gen ? 'Settimana generica (orario tipo, senza variazioni)' : `Settimana dal ${fmt(mon)} al ${fmt(addDays(mon, 5))}`;
+  const o = pdfOpt(), cache = {};
+  const pageFrame = async (pn, body) => {   // intestazione e piè di pagina come nel PDF delle planimetrie
+    const pt = pn === 'terra' ? 'Piano terra' : 'Primo piano';
+    if (o.hdr && !cache[pn]) cache[pn] = await headerImage((o.text || PDF_DEF.text).replace(/\{PIANO\}/g, pt.toUpperCase()).toUpperCase(), 400, 18);
+    const info = `Scuola secondaria Mestica · ${pt} · ${gen ? 'orario tipo' : 'settimana dal ' + fmt(mon)}${gen ? '' : ' · tratteggio / «var.» = variazione'}`;
+    return `<div class="pa">${o.hdr ? `<img class="phdr" src="${cache[pn]}">` : ''}${body}` +
+      (o.ms || o.dg || o.info ? '<div class="pfoot"><div class="l">' + (o.ms ? `<img src="${LOGO_MS.src}"><span>Gestione locali Mestica</span>` : '') + '</div>' +
+        `<div>${o.info ? esc(info) : ''}</div><div class="r">` + (o.dg ? `<span>powered by</span><img src="${LOGO_DG.src}">` : '') + '</div></div>' : '') + '</div>';
+  };
+  const rowsOf = r => items.filter(i => i.roomId === r.id);
+  const legend = ls => leg && ls.length ? '<div class="plegend" style="margin-top:8px">' + [...new Set(ls)].sort().map(chip).join('') + '</div>' : '';
+  const roomBody = r => {
+    const its = rowsOf(r), fx = permOf(r.id);
+    return `<div class="pa-aula"><h2>${r.numero != null ? 'Aula ' + esc(r.numero) + ' · ' : ''}${esc(r.nome)}</h2><p class="psub">${esc(sub)}</p>` +
+      (fx.length ? '<div class="pfix"><b>Assegnazione fissa:</b> ' + fx.map(p => chip(p.etichetta) + (doc && p.docente ? ' ' + esc(p.docente) : '')).join(' ') + '</div>' : '') +
+      '<table class="grid"><thead><tr>' + heads.map(x => `<th>${x}</th>`).join('') + '</tr></thead><tbody><tr>' +
+      [1, 2, 3, 4, 5, 6].map(g => '<td>' + its.filter(i => i.g === g).sort((a, b) => toMin(a.dalle) - toMin(b.dalle)).map(i => prtEv(i, doc)).join('') + '</td>').join('') +
+      '</tr></tbody></table>' + legend([...its.map(i => i.etichetta), ...fx.map(p => p.etichetta)]) + '</div>';
+  };
+  const roomPage = r => pageFrame(r.piano, roomBody(r));
+  const rooms = S.rooms.filter(r => r.piano === piano && (!only || rowsOf(r).length || permOf(r.id).length));
+  if (scope === 'aula') { const r = room($('#prtRoom').value); return r ? await roomPage(r) : ''; }
+  if (scope === 'tutte') return (await Promise.all(rooms.map(roomPage))).join('');
+  if (!rooms.length) return pageFrame(piano, '<p>Nessuna assegnazione per questo piano.</p>');
+  return pageFrame(piano, `<div class="pa-piano"><h2>${piano === 'terra' ? 'Piano terra' : 'Primo piano'} · Assegnazione locali</h2><p class="psub">${esc(sub)}</p>` +
+    '<table class="grid"><thead><tr><th class="rn">N.</th><th>Etichetta</th>' + heads.map(x => `<th>${x}</th>`).join('') + '</tr></thead><tbody>' +
+    rooms.map(r => `<tr><th class="rn">${esc(r.numero ?? '')}</th><th>${esc(r.nome)}${fixedTag(r.id)}</th>` +
+      [1, 2, 3, 4, 5, 6].map(g => '<td>' + rowsOf(r).filter(i => i.g === g).sort((a, b) => toMin(a.dalle) - toMin(b.dalle)).map(i => prtEv(i, doc)).join('') + '</td>').join('') + '</tr>').join('') +
+    '</tbody></table>' + legend([...items.filter(i => rooms.some(r => r.id === i.roomId)).map(i => i.etichetta), ...rooms.flatMap(r => permOf(r.id).map(p => p.etichetta))]) + '</div>');
+}
+const PRT = ['prtScope', 'prtRoom', 'prtWeek', 'prtLeg', 'prtDoc', 'prtOnly'];
+function prtLoad() {
+  const p = UI.prt || {};
+  PRT.forEach(id => { const el = $('#' + id); if (p[id] == null) return; if (el.type === 'checkbox') el.checked = !!p[id]; else if ([...el.options || []].some(o => o.value === p[id])) el.value = p[id]; });
+  $('#prtRoomL').hidden = $('#prtScope').value !== 'aula';
+}
+PRT.forEach(id => $('#' + id).addEventListener('change', () => {
+  UI.prt = Object.fromEntries(PRT.map(k => [k, $('#' + k).type === 'checkbox' ? $('#' + k).checked : $('#' + k).value])); saveUI();
+  $('#prtRoomL').hidden = $('#prtScope').value !== 'aula';
+}));
+$('#prtGo').addEventListener('click', async () => {
+  const html = await buildPrint();
+  if (!html) { await uiAlert('Niente da stampare: scegli un\'aula.'); return; }
+  $('#printArea').innerHTML = html;
+  document.body.classList.add('print-sett');
+  window.print();
+});
+
 /* ---------- sezioni a scomparsa della scheda Planimetrie (stato ricordato) ---------- */
 if (!UI.open) UI.open = { pianta: true };
 document.querySelectorAll('details.tool').forEach(d => {
@@ -1306,6 +1372,7 @@ applyUI();
 $('#ver').textContent = VERSION;
 updateModo();
 fillRoomSelects();
+prtLoad();
 fillMapRooms();
 refreshGroups();
 refreshPaths();
