@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-10-24 · opzioni PDF';
+const VERSION = '2026-10-24 · menu a scomparsa';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -41,7 +41,7 @@ const uiPromptMulti = (msg, def = '') => uiDialog(msg, { input: def, ok: 'OK', c
 
 /* ---------- preferenze di visualizzazione (solo questo dispositivo) ---------- */
 const UI_KEY = 'mestspace-ui';
-let UI = { big: false, day: 0 };
+let UI = { big: false, day: 0, open: { pianta: true } };
 try { Object.assign(UI, JSON.parse(localStorage.getItem(UI_KEY)) || {}); } catch (e) {}
 const saveUI = () => { try { localStorage.setItem(UI_KEY, JSON.stringify(UI)); } catch (e) {} };
 const isNarrow = () => window.matchMedia('(max-width: 600px)').matches;
@@ -1205,6 +1205,13 @@ $('#roomsCsv').addEventListener('click', () => {
   const el = document.createElement('a');
   el.href = URL.createObjectURL(new Blob(['\uFEFF' + out.map(r => r.map(q).join(';')).join('\n')], { type: 'text/csv;charset=utf-8' }));
   el.download = 'aule-e-assegnazioni.csv'; el.click();
+});
+
+/* ---------- sezioni a scomparsa della scheda Planimetrie (stato ricordato) ---------- */
+if (!UI.open) UI.open = { pianta: true };
+document.querySelectorAll('details.tool').forEach(d => {
+  d.open = !!UI.open[d.dataset.k];
+  d.addEventListener('toggle', () => { UI.open = UI.open || {}; UI.open[d.dataset.k] = d.open; saveUI(); });
 });
 
 /* ---------- avvio ---------- */

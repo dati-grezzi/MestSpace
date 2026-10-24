@@ -70,6 +70,16 @@
   .dlg input,.dlg textarea{width:100%;margin-bottom:12px;font:inherit;box-sizing:border-box}
   .dlg textarea{resize:vertical}
   .dlg-b{display:flex;gap:8px;justify-content:flex-end}
+  details.tool{border:1.5px solid var(--rule);border-radius:10px;background:var(--paper2);margin-bottom:8px}
+  details.tool>summary{padding:9px 12px;cursor:pointer;font-weight:600;font-family:'Zilla Slab',Georgia,serif;font-size:15px;list-style:none;display:flex;justify-content:space-between;align-items:center;user-select:none}
+  details.tool>summary::-webkit-details-marker{display:none}
+  details.tool>summary::after{content:'▾';color:var(--ink-soft)}
+  details.tool[open]>summary::after{content:'▴'}
+  details.tool[open]>summary{border-bottom:1px solid var(--rule-soft);margin-bottom:8px}
+  details.tool>.bar,details.tool>p{margin-left:12px;margin-right:12px}
+  #pdfHdrText{width:100%;box-sizing:border-box}
+  #pdfBar label:has(#pdfHdrText){flex:1 1 100%;display:flex;flex-direction:column;gap:2px}
+  #quickBar{position:sticky;top:0;z-index:5;background:var(--paper);padding:6px 0;border-bottom:1px solid var(--rule-soft)}
   .hint{color:var(--ink-soft);font-size:13px}
   #grid,#listAss,#reportBody{overflow-x:auto}
   #listAss table.grid td,#reportBody table.grid td{min-width:0}
@@ -183,22 +193,37 @@
   </section>
 
   <section id="tab-planimetrie" hidden>
-    <div class="bar">
-      <select id="planPiano">
-        <option value="terra">Piano terra</option>
-        <option value="primo">Primo piano</option>
-      </select>
-      <label>Pagina PDF <input type="number" id="pdfPage" min="1" value="1" style="width:4em"></label>
-      <input type="file" id="planFile" accept="image/*,.svg,application/pdf">
-      <button id="rotBtn">Ruota 90°</button>
-      <button id="clearPts">Elimina tutte (piano)</button>
-      <label><input type="checkbox" id="moveMode"> Sposta etichette</label>
-      <label><input type="checkbox" id="showNums" checked> Numeri</label>
-      <label><input type="checkbox" id="showNames" checked> Etichette</label>
-      <label><input type="checkbox" id="showLabels" checked> Attività</label>
-      <button id="pngBtn">Scarica PNG</button>
-      <button id="printPlan">Stampa (PDF A3)</button>
+    <details class="tool" data-k="pianta" open>
+      <summary>🗺 Pianta e stampa</summary>
+      <div class="bar">
+        <label>Pagina PDF <input type="number" id="pdfPage" min="1" value="1" style="width:4em"></label>
+        <input type="file" id="planFile" accept="image/*,.svg,application/pdf">
+        <button id="rotBtn">Ruota pianta 90°</button>
+        <button id="pngBtn">Scarica PNG</button>
+        <button id="printPlan" class="primary">Stampa (PDF A3)</button>
+      </div>
+    <div class="bar" id="pdfBar">
+      <b>Stampa PDF – includi:</b>
+      <label><input type="checkbox" id="pdfHdr" checked> Intestazione con logo della scuola</label>
+      <label>Testo <input type="text" id="pdfHdrText" size="44"></label>
+      <label><input type="checkbox" id="pdfMs" checked> Logo MestSpace</label>
+      <label><input type="checkbox" id="pdfDg" checked> Powered by datigrezzi</label>
+      <label><input type="checkbox" id="pdfInfo" checked> Riga piano e settimana</label>
+      <span class="hint">«{PIANO}» nel testo diventa Piano terra / Primo piano.</span>
     </div>
+    </details>
+    <details class="tool" data-k="vista">
+      <summary>👁 Visualizza</summary>
+      <div class="bar">
+        <label><input type="checkbox" id="showNums" checked> Numeri</label>
+        <label><input type="checkbox" id="showNames" checked> Etichette</label>
+        <label><input type="checkbox" id="showLabels" checked> Attività</label>
+        <label><input type="checkbox" id="showPaths" checked> Percorsi</label>
+        <button id="clearPts">Elimina tutte le etichette (piano)</button>
+      </div>
+    </details>
+    <details class="tool" data-k="gruppi">
+      <summary>▦ Gruppi (livelli)</summary>
     <div class="bar" id="grpBar">
       <label>Gruppo (livello) <select id="grpSel"></select></label>
       <button id="grpAdd">+ Nuovo</button>
@@ -214,6 +239,9 @@
       <label>Sfondo <input type="color" id="grpBg" value="#ffffff"></label>
       <button id="grpStyleReset">Stile predefinito</button>
     </div>
+    </details>
+    <details class="tool" data-k="etichette">
+      <summary>🏷 Etichette</summary>
     <div class="bar">
       <select id="mapRoom"></select>
       <button id="freeAdd">+ Aggiungi etichetta</button>
@@ -230,35 +258,39 @@
       <label>Testo <input type="color" id="lblTc" value="#111111"></label>
       <label>Sfondo <input type="color" id="lblBg" value="#ffffff"></label>
       <button id="lblReset">Segui il gruppo</button>
-      <span id="freeHint" class="hint" hidden><b>Tocca il disegno per posizionare la nuova etichetta.</b></span>
-      <span id="selInfo" class="hint">Nessuna etichetta selezionata.</span>
     </div>
-    <div class="bar" id="pdfBar">
-      <b>Stampa PDF – includi:</b>
-      <label><input type="checkbox" id="pdfHdr" checked> Intestazione con logo della scuola</label>
-      <label>Testo <input type="text" id="pdfHdrText" size="44"></label>
-      <label><input type="checkbox" id="pdfMs" checked> Logo MestSpace</label>
-      <label><input type="checkbox" id="pdfDg" checked> Powered by datigrezzi</label>
-      <label><input type="checkbox" id="pdfInfo" checked> Riga piano e settimana</label>
-      <span class="hint">«{PIANO}» nel testo diventa Piano terra / Primo piano.</span>
-    </div>
+    </details>
+    <details class="tool" data-k="percorsi">
+      <summary>➰ Percorsi</summary>
     <div class="bar" id="pathBar">
       <b>Percorsi:</b>
       <select id="pathSel"></select>
       <button id="pathNew">+ Nuovo percorso</button>
-      <button id="pathEnd" hidden>✔ Fine</button>
-      <button id="pathUndo" hidden>↶ Ultimo punto</button>
-      <button id="pathCancel" hidden>✖ Annulla</button>
       <label>Colore <input type="color" id="pathColor" value="#C62828"></label>
       <label><input type="checkbox" id="pathDash" checked> Tratteggiato</label>
       <label>Frecce <select id="pathArrow"><option value="fine">Solo in fondo</option><option value="tratti">Lungo il percorso</option><option value="nessuna">Nessuna</option></select></label>
       <label>Spessore <input type="range" id="pathWidth" min="0.5" max="4" step="0.1" value="1"></label>
       <button id="pathRen">Rinomina</button>
       <button id="pathDel">Elimina</button>
-      <label><input type="checkbox" id="showPaths" checked> Mostra percorsi</label>
-      <span id="pathInfo" class="hint"></span>
     </div>
+    </details>
+    <details class="tool" data-k="guida">
+      <summary>ℹ Guida</summary>
     <p class="hint">Scegli dall'elenco un <b>numero</b> (1–27), l'<b>etichetta</b> del locale (es. Biblioteca) o le <b>attività</b> assegnate a un'aula, poi tocca il disegno nel punto in cui metterli: sono tre elementi indipendenti. Con «+ Aggiungi etichetta» crei invece un'etichetta libera con testo a piacere (es. Ingresso), che va nel gruppo attivo. Per spostarne una già posizionata trascinala: col mouse basta farlo, sul telefono attiva prima «Sposta etichette». Ogni <b>gruppo</b> è un livello con rotazione, dimensione, carattere, colori e visibilità propri: le nuove etichette vanno nel gruppo attivo; «Nascondi» toglie il gruppo dalla pianta (anche da PNG e PDF), «Blocca» impedisce ogni modifica a lui e alle sue etichette finché non lo sblocchi e le modifiche di gruppo toccano solo quelle. Le impostazioni della barra «Etichetta selezionata» (rotazione, dimensione, carattere, colori) valgono solo per quella etichetta, svincolata dal gruppo, finché non premi «Segui il gruppo». Con «+ Nuovo percorso» tracci una spezzata punto per punto (tratteggiata, con frecce): tocca i punti sulla pianta e premi «Fine». Il percorso va nel gruppo attivo, quindi segue nascondi/blocca; i vertici si correggono trascinandoli. Le attività seguono la settimana selezionata nel tab Settimana.</p>
+    </details>
+    <div class="bar" id="quickBar">
+      <select id="planPiano">
+        <option value="terra">Piano terra</option>
+        <option value="primo">Primo piano</option>
+      </select>
+      <label><input type="checkbox" id="moveMode"> Sposta etichette</label>
+      <button id="pathEnd" hidden>✔ Fine</button>
+      <button id="pathUndo" hidden>↶ Ultimo punto</button>
+      <button id="pathCancel" hidden>✖ Annulla</button>
+      <span id="freeHint" class="hint" hidden><b>Tocca il disegno per posizionare la nuova etichetta.</b></span>
+      <span id="pathInfo" class="hint"></span>
+      <span id="selInfo" class="hint">Nessuna etichetta selezionata.</span>
+    </div>
     <canvas id="planCanvas"></canvas>
   </section>
 
@@ -329,6 +361,6 @@
   </button>
 </nav>
 
-<script src="app.js?v=20261024d"></script>
+<script src="app.js?v=20261024e"></script>
 </body>
 </html>
