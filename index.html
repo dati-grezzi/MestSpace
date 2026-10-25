@@ -252,6 +252,19 @@
   <div id="printArea"></div>
 
   <section id="tab-planimetrie" hidden>
+    <div class="bar" id="quickBar">
+      <select id="planPiano">
+        <option value="terra">Piano terra</option>
+        <option value="primo">Primo piano</option>
+      </select>
+      <label><input type="checkbox" id="moveMode"> Sposta etichette</label>
+      <button id="pathEnd" hidden>✔ Fine</button>
+      <button id="pathUndo" hidden>↶ Ultimo punto</button>
+      <button id="pathCancel" hidden>✖ Annulla</button>
+      <span id="freeHint" class="hint" hidden><b>Tocca il disegno per posizionare la nuova etichetta.</b></span>
+      <span id="pathInfo" class="hint"></span>
+      <span id="selInfo" class="hint">Nessuna etichetta selezionata.</span>
+    </div>
     <details class="tool" data-k="pianta" open>
       <summary>🗺 Pianta e stampa</summary>
       <div class="bar">
@@ -337,19 +350,6 @@
       <summary>ℹ Guida</summary>
     <p class="hint">Scegli dall'elenco un <b>numero</b> (1–27), l'<b>etichetta</b> del locale (es. Biblioteca) o le <b>attività</b> assegnate a un'aula, poi tocca il disegno nel punto in cui metterli: sono tre elementi indipendenti. Con «+ Aggiungi etichetta» crei invece un'etichetta libera con testo a piacere (es. Ingresso), che va nel gruppo attivo. Per spostarne una già posizionata trascinala: col mouse basta farlo, sul telefono attiva prima «Sposta etichette». Ogni <b>gruppo</b> è un livello con rotazione, dimensione, carattere, colori e visibilità propri: le nuove etichette vanno nel gruppo attivo; «Nascondi» toglie il gruppo dalla pianta (anche da PNG e PDF), «Blocca» impedisce ogni modifica a lui e alle sue etichette finché non lo sblocchi e le modifiche di gruppo toccano solo quelle. Le impostazioni della barra «Etichetta selezionata» (rotazione, dimensione, carattere, colori) valgono solo per quella etichetta, svincolata dal gruppo, finché non premi «Segui il gruppo». Con «+ Nuovo percorso» tracci una spezzata punto per punto (tratteggiata, con frecce): tocca i punti sulla pianta e premi «Fine». Il percorso va nel gruppo attivo, quindi segue nascondi/blocca; i vertici si correggono trascinandoli. Le attività seguono la settimana selezionata nel tab Settimana.</p>
     </details>
-    <div class="bar" id="quickBar">
-      <select id="planPiano">
-        <option value="terra">Piano terra</option>
-        <option value="primo">Primo piano</option>
-      </select>
-      <label><input type="checkbox" id="moveMode"> Sposta etichette</label>
-      <button id="pathEnd" hidden>✔ Fine</button>
-      <button id="pathUndo" hidden>↶ Ultimo punto</button>
-      <button id="pathCancel" hidden>✖ Annulla</button>
-      <span id="freeHint" class="hint" hidden><b>Tocca il disegno per posizionare la nuova etichetta.</b></span>
-      <span id="pathInfo" class="hint"></span>
-      <span id="selInfo" class="hint">Nessuna etichetta selezionata.</span>
-    </div>
     <canvas id="planCanvas"></canvas>
   </section>
 
@@ -420,6 +420,6 @@
   </button>
 </nav>
 
-<script src="app.js?v=20261025a"></script>
+<script src="app.js?v=20261025b"></script>
 </body>
 </html>
