@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-10-24 · eventi e locali';
+const VERSION = '2026-10-25 · Auditorium in elenco';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -72,6 +72,8 @@ const SEED = [
   ['terra', null, 'Palestra', 'palestra', ''],
   ['terra', null, 'Spogliatoi', 'servizi', ''],
   ['terra', null, 'Settore A', 'spazio comune', ''],
+  ['terra', null, 'Auditorium', 'sala', ''],
+  ['terra', null, 'Corridoi piano terra', 'spazio comune', ''],
   ['primo', 11, 'Aula 2D', 'classe', ''],
   ['primo', 12, 'Aula francese sax', 'strumento', ''],
   ['primo', 13, 'Aula 2A', 'classe', ''],
@@ -113,6 +115,7 @@ function load() {
     const s = JSON.parse(localStorage.getItem(STORE));
     if (s && s.v) {
       s.perm = s.perm || [];
+      SEED.forEach(([piano, numero, nome, tipo, note]) => { const id = roomKey(piano, numero, nome); if (!s.rooms.some(r => r.id === id)) s.rooms.push({ id, piano, numero, nome, tipo, note, cap: CAP[numero]?.[0] ?? null, mq: CAP[numero]?.[1] ?? null }); });
       s.rooms.forEach(r => { if (r.cap === undefined && CAP[r.numero]) { r.cap = CAP[r.numero][0]; r.mq = CAP[r.numero][1]; } });
       return s;
     }
@@ -131,7 +134,7 @@ const chip = l => `<span class="chip" style="background:${colorOf(l)}">${esc(l)}
 const fixedTag = id => permOf(id).map(p => `<br><span class="fixed" style="background:${colorOf(p.etichetta)}">${esc(p.etichetta)}${p.docente ? ' · ' + esc(p.docente) : ''}</span>`).join('');
 
 /* ---------- calcolo occupazioni ---------- */
-// Una variazione attiva in una data sostituisce l'intera giornata dell'aula per quella data.
+// Una variazione attiva in una data sostituisce l'orario tipo della stessa aula solo negli orari che si sovrappongono.
 function dayItems(date) {
   const w = parseISO(date).getDay();
   if (!w) return [];
