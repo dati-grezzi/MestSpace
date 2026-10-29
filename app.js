@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-10-25 · piano in cima';
+const VERSION = '2026-10-29 · copia gruppo';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -491,7 +491,8 @@ async function drawPlan() {
     const kind = key.startsWith('n:') ? 'n' : key.startsWith('e:') ? 'e' : key.startsWith('f:') ? 'f' : 'a';
     const x = pt.x * W, y = pt.y * H;
     if (kind === 'f') { const t = p.free?.[key.slice(2)]; if (t) drawLabel(t, x, y, key, false, st, sel); continue; }   // etichetta libera
-    const r = room(kind === 'a' ? key : key.slice(2));
+    const bk = key.replace(/#.*$/, '');   // le copie di un gruppo hanno la chiave con suffisso «#id»
+    const r = room(kind === 'a' ? bk : bk.slice(2));
     if (!r) continue;
     if (kind === 'n') { if (showNums && r.numero != null) drawLabel(String(r.numero), x, y + 4, key, true, st, sel); continue; }
     if (kind === 'e') { if ($('#showNames').checked) drawLabel(r.nome, x, y, key, false, st, sel); continue; }
@@ -598,7 +599,7 @@ function updateSel() {
   if (!pt) { selKey = null; $('#selInfo').textContent = 'Nessuna etichetta selezionata.'; if ($('#grpFont')) syncStyleControls(); return; }
   if (selKey.startsWith('f:')) { $('#selInfo').textContent = `Selezionata: etichetta libera «${(p.free?.[selKey.slice(2)] || '').replace(/\n/g, ' ⏎ ')}» · ${groupOf(p, pt).name}`; if ($('#grpFont')) syncStyleControls(); return; }
   const k = selKey.startsWith('n:') ? 'numero' : selKey.startsWith('e:') ? 'etichetta' : 'attività';
-  const r = room(selKey.replace(/^[ne]:/, ''));
+  const r = room(selKey.replace(/#.*$/, '').replace(/^[ne]:/, ''));
   $('#selInfo').textContent = `Selezionata: ${k} ${r ? (r.numero ?? r.nome) : ''} · ${groupOf(p, pt).name}`;
   if ($('#grpFont')) syncStyleControls();
 }
@@ -633,6 +634,22 @@ $('#grpAdd').addEventListener('click', async () => {
   const name = await uiPrompt('Nome del nuovo gruppo di etichette:', 'Gruppo ' + (p.groups.length + 1)); if (!name) return;
   const g = { id: 'g' + uid(), name: name.trim(), rot: 0, scale: curGroup().scale, vis: true };
   p.groups.push(g); p.active = g.id; save(); refreshGroups(); drawPlan();
+});
+$('#grpCopy').addEventListener('click', async () => {
+  const p = curPlan(), g = curGroup(); grpsOf($('#planPiano').value);
+  const name = await uiPrompt('Nome della copia del gruppo:', g.name + ' (copia)'); if (!name) return;
+  const ng = { ...g, id: 'g' + uid(), name: name.trim(), vis: true, lock: false };
+  const sfx = '#' + uid().slice(0, 4);
+  let nPt = 0, nPa = 0;
+  Object.entries(p.points).filter(([k, pt]) => groupOf(p, pt).id === g.id).forEach(([k, pt]) => {
+    let nk;
+    if (k.startsWith('f:')) { nk = 'f:' + uid(); p.free = p.free || {}; p.free[nk.slice(2)] = p.free[k.slice(2)]; }   // etichetta libera: nuovo testo indipendente
+    else nk = k.replace(/#.*$/, '') + sfx;                                                                           // numero/nome/attività: stessa voce, chiave distinta
+    p.points[nk] = { ...pt, g: ng.id }; nPt++;
+  });
+  pathsOf(p).filter(x => groupOf(p, x).id === g.id).forEach(x => { p.paths.push({ ...x, id: uid(), pts: x.pts.map(q => ({ ...q })), g: ng.id }); nPa++; });
+  p.groups.push(ng); p.active = ng.id; selKey = null; save(); refreshGroups(); drawPlan();
+  await uiAlert(`Creato «${ng.name}» con ${nPt} etichette e ${nPa} percorsi, nella stessa posizione degli originali. Trascinale, ruotale o cambia stile solo per questo gruppo; nascondi l'altro per confrontare.`);
 });
 $('#grpRen').addEventListener('click', async () => {
   const g = curGroup(), name = await uiPrompt('Nuovo nome del gruppo:', g.name); if (!name) return;
