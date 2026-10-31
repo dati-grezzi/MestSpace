@@ -1068,7 +1068,6 @@ function renderReport() {
         const orari = x.orari.map(i =>
           `<div>${DAYS[parseISO(i.date).getDay()]} ${i.dalle}–${i.alle} ${chip(i.etichetta)}` +
           (S.corta.includes(i.etichetta) ? ' <i>(corta)</i>' : '') +
-          (i.src === 'var' ? ' <span class="vtag">var.</span>' : '') +
           (i.docente ? ` <small>${esc(i.docente)}</small>` : '') + '</div>').join('') || '—';
         return `<tr><th class="rn">${esc(x.room.numero ?? '')}</th><th>${esc(x.room.nome)}</th><td>${esc(x.room.tipo)}</td><td class="cap">${x.room.cap ?? ''}</td><td>${fisse}</td><td>${orari}</td></tr>`;
       }).join('') + '</tbody></table>';
@@ -1078,7 +1077,7 @@ function renderReport() {
     `<p>Settimana dal ${fmt(mon)} al ${fmt(addDays(mon, 5))}. Per cambiare settimana usa il tab Settimana.</p>`;
   const body = section('terra') + section('primo');
   $('#reportBody').innerHTML = body
-    ? body + '<h3>Legenda</h3>' + [...labels].sort().map(chip).join('') + '<p class="hint">Cap. = capienza scolastica (Ce, tavola Capienze aule 2022/23). Bordo tratteggiato / “var.” = variazione. “(corta)” = settimana corta.</p>'
+    ? body + '<h3>Legenda</h3>' + [...labels].sort().map(chip).join('') + '<p class="hint">Cap. = capienza scolastica (Ce, tavola Capienze aule 2022/23). “(corta)” = settimana corta.</p>'
     : '<p>Nessuna assegnazione da mostrare.</p>';
 }
 $('#repPiano').addEventListener('change', renderReport);
