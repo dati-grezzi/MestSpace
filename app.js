@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-10-29 · copia gruppo';
+const VERSION = '2026-10-31 · stampa aula a ore';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -1322,32 +1322,57 @@ function prtItems(gen) {
 }
 function prtEv(i, doc) {
   return `<div class="ev ${i.src}" style="background:${colorOf(i.etichetta)}"><b>${i.dalle}–${i.alle}</b> ${esc(i.etichetta)}` +
-    (S.corta.includes(i.etichetta) ? ' <i>(corta)</i>' : '') + (i.src === 'var' ? ' <span class="vtag">var.</span>' : '') +
+    (S.corta.includes(i.etichetta) ? ' <i>(corta)</i>' : '') +
     (doc && i.docente ? `<br><small>${esc(i.docente)}</small>` : '') + '</div>';
 }
 async function buildPrint() {
-  const scope = $('#prtScope').value, gen = $('#prtWeek').value === 'gen', leg = $('#prtLeg').checked, doc = $('#prtDoc').checked, only = $('#prtOnly').checked;
+  const dates = $('#prtDates').checked, scope = $('#prtScope').value, gen = $('#prtWeek').value === 'gen', leg = $('#prtLeg').checked, doc = $('#prtDoc').checked, only = $('#prtOnly').checked;
   const mon = mondayOf(weekDate), items = prtItems(gen), piano = $('#pianoSel').value;
-  const heads = [1, 2, 3, 4, 5, 6].map(g => gen ? DAYF[g] : `${DAYS[g]} ${parseISO(addDays(mon, g - 1)).getDate()}/${parseISO(addDays(mon, g - 1)).getMonth() + 1}`);
-  const sub = gen ? 'Settimana generica (orario tipo, senza variazioni)' : `Settimana dal ${fmt(mon)} al ${fmt(addDays(mon, 5))}`;
+  const heads = [1, 2, 3, 4, 5, 6].map(g => (gen || !dates) ? DAYF[g] : `${DAYS[g]} ${parseISO(addDays(mon, g - 1)).getDate()}/${parseISO(addDays(mon, g - 1)).getMonth() + 1}`);
+  const sub = gen ? 'Settimana generica (orario tipo, senza variazioni)' : dates ? `Settimana dal ${fmt(mon)} al ${fmt(addDays(mon, 5))}` : 'Settimana corrente';
   const o = pdfOpt(), cache = {};
   const pageFrame = async (pn, body) => {   // intestazione e piè di pagina come nel PDF delle planimetrie
     const pt = pn === 'terra' ? 'Piano terra' : 'Primo piano';
     if (o.hdr && !cache[pn]) cache[pn] = await headerImage((o.text || PDF_DEF.text).replace(/\{PIANO\}/g, pt.toUpperCase()).toUpperCase(), 400, 18);
-    const info = `Scuola secondaria Mestica · ${pt} · ${gen ? 'orario tipo' : 'settimana dal ' + fmt(mon)}${gen ? '' : ' · tratteggio / «var.» = variazione'}`;
+    const info = `Scuola secondaria Mestica · ${pt} · ${gen ? 'orario tipo' : dates ? 'settimana dal ' + fmt(mon) : 'settimana corrente'}`;
     return `<div class="pa">${o.hdr ? `<img class="phdr" src="${cache[pn]}">` : ''}${body}` +
       (o.ms || o.dg || o.info ? '<div class="pfoot"><div class="l">' + (o.ms ? `<img src="${LOGO_MS.src}"><span>Gestione locali Mestica</span>` : '') + '</div>' +
         `<div>${o.info ? esc(info) : ''}</div><div class="r">` + (o.dg ? `<span>powered by</span><img src="${LOGO_DG.src}">` : '') + '</div></div>' : '') + '</div>';
   };
   const rowsOf = r => items.filter(i => i.roomId === r.id);
   const legend = ls => leg && ls.length ? '<div class="plegend" style="margin-top:8px">' + [...new Set(ls)].sort().map(chip).join('') + '</div>' : '';
+  // griglia per aula: una colonna con le ore (1°–6° e «Pomeriggio»), le attività nella riga dell'ora corrispondente
+  const HOURS = [['1°', '08:05', '09:05'], ['2°', '09:05', '10:00'], ['3°', '10:10', '11:05'], ['4°', '11:05', '12:10'], ['5°', '12:10', '13:05'], ['6°', '13:05', '14:05'], ['Pom.', '14:05', '24:00']];
+  const rowSpan = e => {
+    const rs = [];
+    HOURS.forEach((h, k) => { if (toMin(e.dalle) < toMin(h[2] === '24:00' ? '23:59' : h[2]) && toMin(e.alle) > toMin(h[1])) rs.push(k); });
+    if (!rs.length) { const k = HOURS.findIndex(h => toMin(h[1]) >= toMin(e.alle)); rs.push(k < 0 ? 6 : k); }
+    return [rs[0], rs[rs.length - 1]];
+  };
+  const roomGrid = its => {
+    const cols = [1, 2, 3, 4, 5, 6].map(g => {
+      const evs = its.filter(i => i.g === g).map(e => ({ e, a: rowSpan(e)[0], b: rowSpan(e)[1] })).sort((x, y) => x.a - y.a || toMin(x.e.dalle) - toMin(y.e.dalle));
+      const blocks = [];
+      evs.forEach(x => { const c = blocks[blocks.length - 1]; if (c && x.a <= c.b) { c.b = Math.max(c.b, x.b); c.evs.push(x.e); } else blocks.push({ a: x.a, b: x.b, evs: [x.e] }); });
+      return blocks;
+    });
+    let h = '<table class="grid hgrid"><thead><tr><th class="hh">Ora</th>' + heads.map(x => `<th>${x}</th>`).join('') + '</tr></thead><tbody>';
+    HOURS.forEach((hr, k) => {
+      h += `<tr class="${k === 6 ? 'hpm' : ''}"><th class="hh"><b>${hr[0]}</b>${k < 6 ? `<br><small>${+hr[1].slice(0, 2)}:${hr[1].slice(3)}–${+hr[2].slice(0, 2)}:${hr[2].slice(3)}</small>` : '<br><small>dopo le 14:05</small>'}</th>`;
+      cols.forEach(bl => {
+        const st = bl.find(b => b.a === k);
+        if (st) h += `<td rowspan="${st.b - st.a + 1}">${st.evs.sort((x, y) => toMin(x.dalle) - toMin(y.dalle)).map(i => prtEv(i, doc)).join('')}</td>`;
+        else if (!bl.some(b => b.a < k && k <= b.b)) h += '<td></td>';
+      });
+      h += '</tr>';
+    });
+    return h + '</tbody></table>';
+  };
   const roomBody = r => {
     const its = rowsOf(r), fx = permOf(r.id);
     return `<div class="pa-aula"><h2>${r.numero != null ? 'Aula ' + esc(r.numero) + ' · ' : ''}${esc(r.nome)}</h2><p class="psub">${esc(sub)}</p>` +
       (fx.length ? '<div class="pfix"><b>Assegnazione fissa:</b> ' + fx.map(p => chip(p.etichetta) + (doc && p.docente ? ' ' + esc(p.docente) : '')).join(' ') + '</div>' : '') +
-      '<table class="grid"><thead><tr>' + heads.map(x => `<th>${x}</th>`).join('') + '</tr></thead><tbody><tr>' +
-      [1, 2, 3, 4, 5, 6].map(g => '<td>' + its.filter(i => i.g === g).sort((a, b) => toMin(a.dalle) - toMin(b.dalle)).map(i => prtEv(i, doc)).join('') + '</td>').join('') +
-      '</tr></tbody></table>' + legend([...its.map(i => i.etichetta), ...fx.map(p => p.etichetta)]) + '</div>';
+      roomGrid(its) + legend([...its.map(i => i.etichetta), ...fx.map(p => p.etichetta)]) + '</div>';
   };
   const roomPage = r => pageFrame(r.piano, roomBody(r));
   const rooms = S.rooms.filter(r => r.piano === piano && (!only || rowsOf(r).length || permOf(r.id).length));
@@ -1360,7 +1385,7 @@ async function buildPrint() {
       [1, 2, 3, 4, 5, 6].map(g => '<td>' + rowsOf(r).filter(i => i.g === g).sort((a, b) => toMin(a.dalle) - toMin(b.dalle)).map(i => prtEv(i, doc)).join('') + '</td>').join('') + '</tr>').join('') +
     '</tbody></table>' + legend([...items.filter(i => rooms.some(r => r.id === i.roomId)).map(i => i.etichetta), ...rooms.flatMap(r => permOf(r.id).map(p => p.etichetta))]) + '</div>');
 }
-const PRT = ['prtScope', 'prtRoom', 'prtWeek', 'prtLeg', 'prtDoc', 'prtOnly'];
+const PRT = ['prtScope', 'prtRoom', 'prtWeek', 'prtDates', 'prtLeg', 'prtDoc', 'prtOnly'];
 function prtLoad() {
   const p = UI.prt || {};
   PRT.forEach(id => { const el = $('#' + id); if (p[id] == null) return; if (el.type === 'checkbox') el.checked = !!p[id]; else if ([...el.options || []].some(o => o.value === p[id])) el.value = p[id]; });

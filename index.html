@@ -98,8 +98,12 @@
   .pa .psub{margin:0 0 8px;color:var(--ink-soft,#555)}
   .pa{display:flex;flex-direction:column;min-height:274mm}
   .pa .phdr{width:100%;display:block;margin-bottom:4mm}
-  .pa-aula .ev{font-size:17px;padding:7px 9px}
-  .pa-aula table.grid td{height:150mm}
+  .pa-aula .ev{font-size:15px;padding:5px 8px;margin-bottom:3px}
+  .pa .ev.var{outline:none}
+  table.hgrid th.hh{width:22mm;text-align:center;white-space:nowrap}
+  table.hgrid{table-layout:fixed;width:100%}
+  table.hgrid td{height:21mm}
+  table.hgrid tr.hpm td{height:42mm}
   .pa .pfoot{margin-top:auto;padding-top:4mm;display:flex;align-items:center;justify-content:space-between;gap:8mm;font-size:12px;color:#444}
   .pa .pfoot img{height:8mm;display:block}
   .pa .pfoot .l,.pa .pfoot .r{display:flex;align-items:center;gap:3mm;flex:0 0 auto}
@@ -190,6 +194,7 @@
         </label>
       </div>
       <div class="bar">
+        <label><input type="checkbox" id="prtDates" checked> Date</label>
         <label><input type="checkbox" id="prtLeg" checked> Legenda</label>
         <label><input type="checkbox" id="prtDoc" checked> Docenti</label>
         <label><input type="checkbox" id="prtOnly" checked> Solo aule con assegnazioni</label>
@@ -421,6 +426,6 @@
   </button>
 </nav>
 
-<script src="app.js?v=20261029a"></script>
+<script src="app.js?v=20261031a"></script>
 </body>
 </html>
