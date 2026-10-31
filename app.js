@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-10-31 · stampa aula a ore';
+const VERSION = '2026-10-31 · percorsi nei gruppi';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -115,6 +115,7 @@ function load() {
     const s = JSON.parse(localStorage.getItem(STORE));
     if (s && s.v) {
       s.perm = s.perm || [];
+      Object.values(s.plans || {}).forEach(pl => { if (pl.paths) pl.paths = pl.paths.filter(x => x.pts && x.pts.length >= 2); });   // niente percorsi fantasma
       SEED.forEach(([piano, numero, nome, tipo, note]) => { const id = roomKey(piano, numero, nome); if (!s.rooms.some(r => r.id === id)) s.rooms.push({ id, piano, numero, nome, tipo, note, cap: CAP[numero]?.[0] ?? null, mq: CAP[numero]?.[1] ?? null }); });
       s.rooms.forEach(r => { if (r.cap === undefined && CAP[r.numero]) { r.cap = CAP[r.numero][0]; r.mq = CAP[r.numero][1]; } });
       return s;
@@ -619,16 +620,16 @@ function refreshGroups() {
   const piano = $('#planPiano').value, p = S.plans[piano];
   grpsOf(piano);
   const n = id => Object.values(p.points).filter(pt => groupOf(p, pt).id === id).length;
-  $('#grpSel').innerHTML = p.groups.map(g => `<option value="${g.id}">${esc(g.name)} (${n(g.id)})${g.vis ? '' : ' 🚫 nascosto'}${g.lock ? ' 🔒' : ''}</option>`).join('');
+  $('#grpSel').innerHTML = p.groups.map(g => `<option value="${g.id}">${esc(g.name)} (${n(g.id)} et. · ${pathsOf(p).filter(x => groupOf(p, x).id === g.id).length} perc.)${g.vis ? '' : ' 🚫 nascosto'}${g.lock ? ' 🔒' : ''}</option>`).join('');
   $('#grpSel').value = p.active;
   const g = curGroup();
   $('#grpVisBtn').textContent = g.vis ? '👁 Nascondi gruppo' : '👁 Mostra gruppo';
   $('#grpLockBtn').textContent = g.lock ? '🔓 Sblocca gruppo' : '🔒 Blocca gruppo';
   ['grpRot', 'grpFont', 'grpAlign', 'grpTc', 'grpBg', 'grpStyleReset', 'labelSize', 'grpDel'].forEach(i => { $('#' + i).disabled = !!g.lock; });
   $('#labelSize').value = g.scale;
-  updateSel(); syncStyleControls();
+  updateSel(); syncStyleControls(); refreshPaths();
 }
-$('#grpSel').addEventListener('change', () => { curPlan().active = $('#grpSel').value; save(); refreshGroups(); });
+$('#grpSel').addEventListener('change', () => { if (drawingPath) cancelPath(); curPlan().active = $('#grpSel').value; selPath = null; save(); refreshGroups(); refreshPaths(); drawPlan(); });
 $('#grpAdd').addEventListener('click', async () => {
   const p = curPlan(); grpsOf($('#planPiano').value);
   const name = await uiPrompt('Nome del nuovo gruppo di etichette:', 'Gruppo ' + (p.groups.length + 1)); if (!name) return;
@@ -723,7 +724,7 @@ $('#clearPts').addEventListener('click', async () => {
   save(); refreshGroups(); drawPlan();
 });
 $('#planPiano').addEventListener('change', () => {
-  img = null; fillMapRooms(); selKey = null; selPath = null; drawingPath = null; refreshGroups(); refreshPaths();
+  if (drawingPath) Object.values(S.plans).forEach(q => { if (q.paths) q.paths = q.paths.filter(x => x !== drawingPath); }); img = null; fillMapRooms(); selKey = null; selPath = null; drawingPath = null; refreshGroups(); refreshPaths();
   $('#pdfPage').value = $('#planPiano').value === 'primo' ? 2 : 1;
   drawPlan();
 });
@@ -801,7 +802,8 @@ $('#rotBtn').addEventListener('click', () => {
   save(); drawPlan();
 });
 function refreshPaths() {
-  const p = curPlan(), L = pathsOf(p);
+  const p = curPlan(); grpsOf($('#planPiano').value);
+  const L = pathsOf(p).filter(x => groupOf(p, x).id === p.active || x === drawingPath);
   $('#pathSel').innerHTML = L.length ? L.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('') : '<option value="">(nessun percorso)</option>';
   if (!L.some(x => x.id === selPath)) selPath = L.length ? L[L.length - 1].id : null;
   $('#pathSel').value = selPath || '';

@@ -300,7 +300,7 @@
       </div>
     </details>
     <details class="tool" data-k="gruppi">
-      <summary>▦ Gruppi (livelli)</summary>
+      <summary>▦ Gruppi (livelli) e percorsi</summary>
     <div class="bar" id="grpBar">
       <label>Gruppo (livello) <select id="grpSel"></select></label>
       <button id="grpAdd">+ Nuovo</button>
@@ -316,6 +316,17 @@
       <label>Testo <input type="color" id="grpTc" value="#111111"></label>
       <label>Sfondo <input type="color" id="grpBg" value="#ffffff"></label>
       <button id="grpStyleReset">Stile predefinito</button>
+    </div>
+        <div class="bar" id="pathBar">
+      <b>Percorsi del gruppo:</b>
+      <select id="pathSel"></select>
+      <button id="pathNew">+ Nuovo percorso</button>
+      <label>Colore <input type="color" id="pathColor" value="#C62828"></label>
+      <label><input type="checkbox" id="pathDash" checked> Tratteggiato</label>
+      <label>Frecce <select id="pathArrow"><option value="fine">Solo in fondo</option><option value="tratti">Lungo il percorso</option><option value="nessuna">Nessuna</option></select></label>
+      <label>Spessore <input type="range" id="pathWidth" min="0.5" max="4" step="0.1" value="1"></label>
+      <button id="pathRen">Rinomina</button>
+      <button id="pathDel">Elimina</button>
     </div>
     </details>
     <details class="tool" data-k="etichette">
@@ -336,20 +347,6 @@
       <label>Testo <input type="color" id="lblTc" value="#111111"></label>
       <label>Sfondo <input type="color" id="lblBg" value="#ffffff"></label>
       <button id="lblReset">Segui il gruppo</button>
-    </div>
-    </details>
-    <details class="tool" data-k="percorsi">
-      <summary>➰ Percorsi</summary>
-    <div class="bar" id="pathBar">
-      <b>Percorsi:</b>
-      <select id="pathSel"></select>
-      <button id="pathNew">+ Nuovo percorso</button>
-      <label>Colore <input type="color" id="pathColor" value="#C62828"></label>
-      <label><input type="checkbox" id="pathDash" checked> Tratteggiato</label>
-      <label>Frecce <select id="pathArrow"><option value="fine">Solo in fondo</option><option value="tratti">Lungo il percorso</option><option value="nessuna">Nessuna</option></select></label>
-      <label>Spessore <input type="range" id="pathWidth" min="0.5" max="4" step="0.1" value="1"></label>
-      <button id="pathRen">Rinomina</button>
-      <button id="pathDel">Elimina</button>
     </div>
     </details>
     <details class="tool" data-k="guida">
@@ -426,6 +423,6 @@
   </button>
 </nav>
 
-<script src="app.js?v=20261031b"></script>
+<script src="app.js?v=20261031c"></script>
 </body>
 </html>
