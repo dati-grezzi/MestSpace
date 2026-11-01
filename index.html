@@ -51,6 +51,9 @@
   table.grid thead th{background:var(--ink);color:var(--paper);text-align:left;white-space:nowrap;font-family:'Zilla Slab',Georgia,serif}
   table.grid tbody th{background:var(--tint-warm);color:var(--ink);text-align:left;white-space:nowrap;border-left:3px solid rgba(76,154,99,.55)}
   table.grid td{min-width:120px}
+  table.grid th.clo{background:#8a4b3a}
+  table.grid td.clo{background:repeating-linear-gradient(45deg,#f3e6e1,#f3e6e1 6px,#ebd9d2 6px,#ebd9d2 12px)}
+  .chi{display:flex;gap:8px;align-items:center;padding:3px 0}
   table.grid th.rn{text-align:center;width:2.5em;padding-left:4px;padding-right:4px}
   .ev{border-radius:7px;padding:4px 6px;margin-bottom:4px;font-size:12px;color:var(--ink)}
   .ev.var{outline:1.5px dashed var(--amber);outline-offset:-2px}
@@ -364,6 +367,16 @@
       <button id="saveCorta">Salva</button>
     </div>
     <div class="bar">
+      <b>Scuola chiusa:</b>
+      <label>dal <input type="date" id="chiDal"></label>
+      <label>al <input type="date" id="chiAl"></label>
+      <label>motivo <input id="chiMot" size="22" placeholder="es. Ponte, elezioni"></label>
+      <button id="chiAdd">+ Aggiungi</button>
+      <button id="chiFest">Aggiungi festività nazionali 2026/27</button>
+    </div>
+    <div id="chiList"></div>
+    <p class="hint">In questi giorni le attività sono sospese: non compaiono in Settimana, Report e stampe e non generano conflitti. Per un solo giorno basta la data iniziale.</p>
+    <div class="bar">
       <button id="fontBtn">Carattere: A</button>
     </div>
     <div class="bar">
@@ -423,6 +436,6 @@
   </button>
 </nav>
 
-<script src="app.js?v=20261031c"></script>
+<script src="app.js?v=20261101a"></script>
 </body>
 </html>

@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-10-31 · percorsi nei gruppi';
+const VERSION = '2026-11-01 · chiusure scuola';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -107,6 +107,7 @@ function fresh() {
     var: [],          // variazioni con periodo dal/al
     perm: [],         // assegnazioni fisse (permanenti), senza giorno né orario
     corta: ['1A', '1C'],
+    chiusure: [],     // giorni di scuola chiusa {id, dal, al, motivo}: attività sospese
     plans: { terra: { rot: 0, points: {} }, primo: { rot: 0, points: {} } }
   };
 }
@@ -115,6 +116,7 @@ function load() {
     const s = JSON.parse(localStorage.getItem(STORE));
     if (s && s.v) {
       s.perm = s.perm || [];
+      s.chiusure = s.chiusure || [];
       Object.values(s.plans || {}).forEach(pl => { if (pl.paths) pl.paths = pl.paths.filter(x => x.pts && x.pts.length >= 2); });   // niente percorsi fantasma
       SEED.forEach(([piano, numero, nome, tipo, note]) => { const id = roomKey(piano, numero, nome); if (!s.rooms.some(r => r.id === id)) s.rooms.push({ id, piano, numero, nome, tipo, note, cap: CAP[numero]?.[0] ?? null, mq: CAP[numero]?.[1] ?? null }); });
       s.rooms.forEach(r => { if (r.cap === undefined && CAP[r.numero]) { r.cap = CAP[r.numero][0]; r.mq = CAP[r.numero][1]; } });
@@ -136,9 +138,10 @@ const fixedTag = id => permOf(id).map(p => `<br><span class="fixed" style="backg
 
 /* ---------- calcolo occupazioni ---------- */
 // Una variazione attiva in una data sostituisce l'orario tipo della stessa aula solo negli orari che si sovrappongono.
+const closureOf = date => (S.chiusure || []).find(c => c.dal <= date && date <= (c.al || c.dal)) || null;
 function dayItems(date) {
   const w = parseISO(date).getDay();
-  if (!w) return [];
+  if (!w || closureOf(date)) return [];   // domenica o scuola chiusa: nessuna attività
   const act = S.var.filter(v => v.giorno === w && v.dal <= date && (!v.al || v.al >= date));
   // una variazione sostituisce l'orario tipo della stessa aula solo negli orari che si sovrappongono
   return [
@@ -196,13 +199,13 @@ function renderGrid() {
     $('#grid').innerHTML = '<p>Nessuna assegnazione per questo piano in questa settimana.</p>';
   } else {
     let html = '<table class="grid"><thead><tr><th class="rn">N.</th><th>Etichetta</th>' +
-      dates.map((d, i) => { const dt = parseISO(d); return `<th>${dayNames[i]} ${dt.getDate()}/${dt.getMonth() + 1}</th>`; }).join('') +
+      dates.map((d, i) => { const dt = parseISO(d); const cl = closureOf(d); return `<th${cl ? ' class="clo"' : ''}>${dayNames[i]} ${dt.getDate()}/${dt.getMonth() + 1}${cl ? `<br><small>Scuola chiusa${cl.motivo ? ' · ' + esc(cl.motivo) : ''}</small>` : ''}</th>`; }).join('') +
       '</tr></thead><tbody>';
     for (const r of rows) {
       html += `<tr><th class="rn">${esc(r.numero ?? '')}</th><th>${esc(r.nome)}${fixedTag(r.id)}</th>`;
       for (const d of dates) {
         const cell = items.filter(i => i.roomId === r.id && i.date === d).sort((a, b) => toMin(a.dalle) - toMin(b.dalle));
-        html += '<td>' + cell.map(i =>
+        html += `<td${closureOf(d) ? ' class="clo"' : ''}>` + cell.map(i =>
           `<div class="ev ${i.src}" style="background:${colorOf(i.etichetta)}">` +
           `<b>${i.dalle}–${i.alle}</b> ${esc(i.etichetta)}` +
           (S.corta.includes(i.etichetta) ? ' <i>(corta)</i>' : '') +
@@ -993,6 +996,25 @@ $('#saveCorta').addEventListener('click', () => {
   S.corta = $('#corta').value.split(',').map(s => s.trim()).filter(Boolean);
   save(); renderAll();
 });
+function renderChiusure() {
+  const L = [...S.chiusure].sort((x, y) => x.dal.localeCompare(y.dal));
+  const f = d => { const t = parseISO(d); return t.getDate() + '/' + (t.getMonth() + 1) + '/' + t.getFullYear(); };
+  $('#chiList').innerHTML = L.length ? L.map(c => `<div class="chi"><span>${f(c.dal)}${c.al && c.al !== c.dal ? ' → ' + f(c.al) : ''} · ${esc(c.motivo || 'Scuola chiusa')}</span> <button data-id="${c.id}">✖</button></div>`).join('') : '<p class="hint">Nessuna chiusura inserita.</p>';
+}
+$('#chiAdd').addEventListener('click', async () => {
+  const dal = $('#chiDal').value, al = $('#chiAl').value || dal;
+  if (!dal) { await uiAlert('Indica almeno la data di chiusura.'); return; }
+  if (al < dal) { await uiAlert('La data finale precede quella iniziale.'); return; }
+  S.chiusure.push({ id: uid(), dal, al, motivo: $('#chiMot').value.trim() });
+  $('#chiDal').value = $('#chiAl').value = $('#chiMot').value = ''; save(); renderChiusure(); renderAll();
+});
+$('#chiList').addEventListener('click', e => { const b = e.target.closest('button[data-id]'); if (!b) return; S.chiusure = S.chiusure.filter(c => c.id !== b.dataset.id); save(); renderChiusure(); renderAll(); });
+$('#chiFest').addEventListener('click', () => {
+  const F = [['2026-11-01', 'Ognissanti'], ['2026-12-08', 'Immacolata'], ['2026-12-25', 'Natale'], ['2026-12-26', 'Santo Stefano'], ['2027-01-01', 'Capodanno'], ['2027-01-06', 'Epifania'], ['2027-03-29', 'Lunedì dell’Angelo'], ['2027-04-25', 'Liberazione'], ['2027-05-01', 'Festa del lavoro'], ['2027-06-02', 'Festa della Repubblica']];
+  F.forEach(([d, m]) => { if (!S.chiusure.some(c => c.dal <= d && d <= (c.al || c.dal))) S.chiusure.push({ id: uid(), dal: d, al: d, motivo: m }); });
+  save(); renderChiusure(); renderAll();
+});
+renderChiusure();
 $('#exportBtn').addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -1007,12 +1029,13 @@ $('#importFile').addEventListener('change', async e => {
     const obj = JSON.parse(await f.text());
     if (!obj.rooms || !obj.std || !obj.var) throw new Error('formato');
     obj.perm = obj.perm || [];
-    S = obj; save(); fillRoomSelects(); fillMapRooms(); refreshGroups(); refreshPaths(); syncPdfOpts(); $('#corta').value = S.corta.join(', '); renderAll();
+    obj.chiusure = obj.chiusure || [];
+    S = obj; save(); fillRoomSelects(); fillMapRooms(); refreshGroups(); refreshPaths(); syncPdfOpts(); $('#corta').value = S.corta.join(', '); renderChiusure(); renderAll();
   } catch (err) { await uiAlert('Backup non valido.'); }
 });
 $('#resetBtn').addEventListener('click', async () => {
   if (!await uiConfirm('Cancellare tutte le assegnazioni e le posizioni sulle planimetrie?')) return;
-  S = fresh(); save(); fillRoomSelects(); fillMapRooms(); refreshGroups(); refreshPaths(); syncPdfOpts(); $('#corta').value = S.corta.join(', '); renderAll();
+  S = fresh(); save(); fillRoomSelects(); fillMapRooms(); refreshGroups(); refreshPaths(); syncPdfOpts(); $('#corta').value = S.corta.join(', '); renderChiusure(); renderAll();
 });
 
 /* ---------- navigazione tab ---------- */
@@ -1329,7 +1352,7 @@ function prtEv(i, doc) {
 async function buildPrint() {
   const dates = $('#prtDates').checked, scope = $('#prtScope').value, gen = $('#prtWeek').value === 'gen', leg = $('#prtLeg').checked, doc = $('#prtDoc').checked, only = $('#prtOnly').checked;
   const mon = mondayOf(weekDate), items = prtItems(gen), piano = $('#pianoSel').value;
-  const heads = [1, 2, 3, 4, 5, 6].map(g => (gen || !dates) ? DAYF[g] : `${DAYS[g]} ${parseISO(addDays(mon, g - 1)).getDate()}/${parseISO(addDays(mon, g - 1)).getMonth() + 1}`);
+  const heads = [1, 2, 3, 4, 5, 6].map(g => (gen || !dates) ? DAYF[g] : `${DAYS[g]} ${parseISO(addDays(mon, g - 1)).getDate()}/${parseISO(addDays(mon, g - 1)).getMonth() + 1}`).map((t, k) => (gen || !closureOf(addDays(mon, k))) ? t : t + ' · chiusa');
   const sub = gen ? 'Settimana generica (orario tipo, senza variazioni)' : dates ? `Settimana dal ${fmt(mon)} al ${fmt(addDays(mon, 5))}` : 'Settimana corrente';
   const o = pdfOpt(), cache = {};
   const pageFrame = async (pn, body) => {   // intestazione e piè di pagina come nel PDF delle planimetrie
