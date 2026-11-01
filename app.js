@@ -118,6 +118,7 @@ function fresh() {
     var: [],          // variazioni con periodo dal/al
     perm: [],         // assegnazioni fisse (permanenti), senza giorno né orario
     corta: ['1A', '1C'],
+    cal2627: true,
     chiusure: CHIUSURE_2627(),     // giorni di scuola chiusa {id, dal, al, motivo}: attività sospese
     plans: { terra: { rot: 0, points: {} }, primo: { rot: 0, points: {} } }
   };
@@ -127,7 +128,8 @@ function load() {
     const s = JSON.parse(localStorage.getItem(STORE));
     if (s && s.v) {
       s.perm = s.perm || [];
-      if (!s.chiusure) s.chiusure = CHIUSURE_2627();
+      s.chiusure = s.chiusure || [];
+      if (!s.cal2627) { CHIUSURE_2627().forEach(c => { if (!s.chiusure.some(x => x.dal <= c.al && c.dal <= (x.al || x.dal))) s.chiusure.push(c); }); s.cal2627 = true; }   // una tantum: calendario 2026/27
       Object.values(s.plans || {}).forEach(pl => { if (pl.paths) pl.paths = pl.paths.filter(x => x.pts && x.pts.length >= 2); });   // niente percorsi fantasma
       SEED.forEach(([piano, numero, nome, tipo, note]) => { const id = roomKey(piano, numero, nome); if (!s.rooms.some(r => r.id === id)) s.rooms.push({ id, piano, numero, nome, tipo, note, cap: CAP[numero]?.[0] ?? null, mq: CAP[numero]?.[1] ?? null }); });
       s.rooms.forEach(r => { if (r.cap === undefined && CAP[r.numero]) { r.cap = CAP[r.numero][0]; r.mq = CAP[r.numero][1]; } });
@@ -1040,7 +1042,7 @@ $('#importFile').addEventListener('change', async e => {
     const obj = JSON.parse(await f.text());
     if (!obj.rooms || !obj.std || !obj.var) throw new Error('formato');
     obj.perm = obj.perm || [];
-    obj.chiusure = obj.chiusure || [];
+    obj.chiusure = obj.chiusure || []; obj.cal2627 = true;
     S = obj; save(); fillRoomSelects(); fillMapRooms(); refreshGroups(); refreshPaths(); syncPdfOpts(); $('#corta').value = S.corta.join(', '); renderChiusure(); renderAll();
   } catch (err) { await uiAlert('Backup non valido.'); }
 });
