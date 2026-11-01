@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-11-01 · chiusure scuola';
+const VERSION = '2026-11-01 · calendario 2026/27';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -99,6 +99,17 @@ const CAP = {1:[50,91.18],2:[40,73.36],3:[44,81.82],4:[37,68.03],5:[25,46.30],6:
 const roomKey = (piano, num, nome) => piano + '-' + (num ?? nome.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
 
 /* ---------- stato e persistenza ---------- */
+// calendario scolastico 2026/27 (All. A.1): giorni non di lezione (le domeniche sono già escluse)
+const CHIUSURE_2627 = () => [
+  ['2026-11-02', '2026-11-02', 'Ulteriore chiusura (delibera C.I. 10/07/2026)'],
+  ['2026-12-07', '2026-12-07', 'Ulteriore chiusura (delibera C.I. 10/07/2026)'],
+  ['2026-12-08', '2026-12-08', 'Immacolata'],
+  ['2026-12-23', '2027-01-06', 'Vacanze natalizie'],
+  ['2027-03-25', '2027-03-30', 'Vacanze pasquali'],
+  ['2027-04-30', '2027-04-30', 'Ulteriore chiusura (delibera C.I. 10/07/2026)'],
+  ['2027-05-01', '2027-05-01', 'Festa del lavoro'],
+  ['2027-06-02', '2027-06-02', 'Festa della Repubblica']
+].map(([dal, al, motivo], i) => ({ id: 'cal' + i, dal, al, motivo }));
 function fresh() {
   return {
     v: 1,
@@ -107,7 +118,7 @@ function fresh() {
     var: [],          // variazioni con periodo dal/al
     perm: [],         // assegnazioni fisse (permanenti), senza giorno né orario
     corta: ['1A', '1C'],
-    chiusure: [],     // giorni di scuola chiusa {id, dal, al, motivo}: attività sospese
+    chiusure: CHIUSURE_2627(),     // giorni di scuola chiusa {id, dal, al, motivo}: attività sospese
     plans: { terra: { rot: 0, points: {} }, primo: { rot: 0, points: {} } }
   };
 }
@@ -116,7 +127,7 @@ function load() {
     const s = JSON.parse(localStorage.getItem(STORE));
     if (s && s.v) {
       s.perm = s.perm || [];
-      s.chiusure = s.chiusure || [];
+      if (!s.chiusure) s.chiusure = CHIUSURE_2627();
       Object.values(s.plans || {}).forEach(pl => { if (pl.paths) pl.paths = pl.paths.filter(x => x.pts && x.pts.length >= 2); });   // niente percorsi fantasma
       SEED.forEach(([piano, numero, nome, tipo, note]) => { const id = roomKey(piano, numero, nome); if (!s.rooms.some(r => r.id === id)) s.rooms.push({ id, piano, numero, nome, tipo, note, cap: CAP[numero]?.[0] ?? null, mq: CAP[numero]?.[1] ?? null }); });
       s.rooms.forEach(r => { if (r.cap === undefined && CAP[r.numero]) { r.cap = CAP[r.numero][0]; r.mq = CAP[r.numero][1]; } });
