@@ -1457,7 +1457,7 @@ function renderAll() {
 }
 if (!localStorage.getItem(UI_KEY)) UI.day = Math.max(0, Math.min(5, new Date().getDay() - 1));
 applyUI();
-$('#ver').textContent = VERSION;
+$('#ver').textContent = VERSION; $('#verTop').textContent = 'v' + VERSION.slice(0, 10).replace(/-/g, '');
 updateModo();
 fillRoomSelects();
 prtLoad();
