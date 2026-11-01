@@ -377,6 +377,14 @@
     <div id="chiList"></div>
     <p class="hint">In questi giorni le attività sono sospese: non compaiono in Settimana, Report e stampe e non generano conflitti. Per un solo giorno basta la data iniziale.</p>
     <div class="bar">
+      <b>Orario dei docenti:</b>
+      <label>Importa (Excel) <input type="file" id="orFile" accept=".xlsx,.xls"></label>
+      <label>Docente <select id="docSel"></select></label>
+      <span id="docInfo" class="hint"></span>
+    </div>
+    <div id="docGrid"></div>
+    <p class="hint">Foglio «orario»: colonna A materie, B docenti, poi 36 colonne (lun–sab × 6 ore). Una cella con la classe indica la lezione, «P» il potenziamento. Se a un'attività assegni un docente (campo «docente») che nello stesso momento ha lezione, la Settimana segnala il conflitto. Le aule mostrate sono quelle fisse delle classi.</p>
+    <div class="bar">
       <button id="fontBtn">Carattere: A</button>
     </div>
     <div class="bar">
@@ -436,6 +444,6 @@
   </button>
 </nav>
 
-<script src="app.js?v=20261101d"></script>
+<script src="app.js?v=20261101e"></script>
 </body>
 </html>

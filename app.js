@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-11-01 · calendario 2026/27';
+const VERSION = '2026-11-01 · orario docenti';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -119,6 +119,7 @@ function fresh() {
     perm: [],         // assegnazioni fisse (permanenti), senza giorno né orario
     corta: ['1A', '1C'],
     cal2627: true,
+    orario: [],       // orario dei docenti importato: {doc, mat, g, h, cl:[classi], k, p}
     chiusure: CHIUSURE_2627(),     // giorni di scuola chiusa {id, dal, al, motivo}: attività sospese
     plans: { terra: { rot: 0, points: {} }, primo: { rot: 0, points: {} } }
   };
@@ -128,7 +129,7 @@ function load() {
     const s = JSON.parse(localStorage.getItem(STORE));
     if (s && s.v) {
       s.perm = s.perm || [];
-      s.chiusure = s.chiusure || [];
+      s.chiusure = s.chiusure || []; s.orario = s.orario || [];
       if (!s.cal2627) { CHIUSURE_2627().forEach(c => { if (!s.chiusure.some(x => x.dal <= c.al && c.dal <= (x.al || x.dal))) s.chiusure.push(c); }); s.cal2627 = true; }   // una tantum: calendario 2026/27
       Object.values(s.plans || {}).forEach(pl => { if (pl.paths) pl.paths = pl.paths.filter(x => x.pts && x.pts.length >= 2); });   // niente percorsi fantasma
       SEED.forEach(([piano, numero, nome, tipo, note]) => { const id = roomKey(piano, numero, nome); if (!s.rooms.some(r => r.id === id)) s.rooms.push({ id, piano, numero, nome, tipo, note, cap: CAP[numero]?.[0] ?? null, mq: CAP[numero]?.[1] ?? null }); });
@@ -167,6 +168,10 @@ function weekItems(mon) {
   for (let i = 0; i < 6; i++) out.push(...dayItems(addDays(mon, i)));
   return out;
 }
+const SCAN = [[1, '08:05', '09:05'], [2, '09:05', '10:00'], [3, '10:10', '11:05'], [4, '11:05', '12:10'], [5, '12:10', '13:05'], [6, '13:05', '14:05']];
+const normN = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z ]/g, ' ').replace(/\s+/g, ' ').trim();
+const surname = n => { const t = String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\./g, ' ').split(/\s+/).filter(Boolean); if (!t.length) return ''; const up = w => w.length > 1 && w === w.toUpperCase(); if (!up(t[0])) return t[0].toUpperCase(); const r = []; for (const w of t) { if (up(w)) r.push(w); else break; } return r.join(' '); };
+const docMatch = (txt, doc) => { const s = surname(doc); return !!s && (' ' + normN(txt) + ' ').includes(' ' + s + ' '); };
 function conflicts(mon) {
   const msgs = [];
   const byRoom = {};
@@ -185,6 +190,16 @@ function conflicts(mon) {
       else if (x.docente && x.docente === y.docente)
         msgs.push(`${date}: docente ${x.docente} in due aule (${roomName(x.roomId)} / ${roomName(y.roomId)})`);
     }
+    // docente indicato su un'attività nello stesso momento in cui ha lezione (orario docenti importato)
+    if (S.orario && S.orario.length) items.forEach(it => {
+      if (!it.docente) return;
+      const g = parseISO(date).getDay();
+      SCAN.forEach(([h, s, e]) => {
+        if (!(toMin(it.dalle) < toMin(e) && toMin(s) < toMin(it.alle))) return;
+        S.orario.filter(o => o.g === g && o.h === h && o.cl.length && docMatch(it.docente, o.doc) && !o.cl.some(c => String(it.etichetta).includes(c))).forEach(o =>
+          msgs.push(`${date}: ${o.doc} ha lezione in ${o.cl.join('+')} alla ${h}ª ora ma è indicato su «${it.etichetta}» (${roomName(it.roomId)}) ${it.dalle}–${it.alle}`));
+      });
+    });
   }
   return msgs;
 }
@@ -1003,6 +1018,57 @@ $('#prevW').addEventListener('click', () => { weekDate = addDays(weekDate, -7); 
 $('#nextW').addEventListener('click', () => { weekDate = addDays(weekDate, 7); renderAll(); });
 $('#pianoSel').addEventListener('change', renderAll);
 
+/* ---------- orario dei docenti (Excel «SOStituto-orario…») ---------- */
+function parseOrario(rows) {   // righe: [materie, docenti, 36 celle (LUN..SAB × 6 ore)]
+  const out = []; let mat = '';
+  rows.slice(3).forEach(r => {
+    if (r[0]) mat = String(r[0]).trim();
+    const doc = String(r[1] || '').trim(); if (!doc) return;
+    for (let i = 0; i < 36; i++) {
+      const v = String(r[2 + i] ?? '').trim(); if (!v) continue;
+      const cl = v.match(/[123][ABCD]/g) || [];
+      out.push({ doc, mat, g: Math.floor(i / 6) + 1, h: (i % 6) + 1, cl, k: (v.match(/^[123][ABCD]([FS])$/) || [])[1] || '', p: !cl.length });
+    }
+  });
+  return out;
+}
+function renderDocenti() {
+  const names = [...new Set(S.orario.map(o => o.doc))];
+  const sel = $('#docSel'), cur = sel.value;
+  sel.innerHTML = names.length ? names.map(n => `<option>${esc(n)}</option>`).join('') : '<option value="">(nessun orario importato)</option>';
+  if (names.includes(cur)) sel.value = cur;
+  const n = S.orario.length;
+  $('#docInfo').textContent = n ? `${names.length} docenti · ${n} ore di servizio importate.` : '';
+  const d = sel.value, L = S.orario.filter(o => o.doc === d);
+  if (!d) { $('#docGrid').innerHTML = ''; return; }
+  const roomOf = c => { const p = S.perm.find(p => p.etichetta === c); return p ? rNum(p.roomId) : ''; };
+  let h = '<table class="grid"><thead><tr><th>Ora</th>' + DAYS.slice(1, 7).map(x => `<th>${x}</th>`).join('') + '</tr></thead><tbody>';
+  SCAN.forEach(([ho, s, e]) => {
+    h += `<tr><th>${ho}° <small>${s}–${e}</small></th>`;
+    for (let g = 1; g <= 6; g++) {
+      const o = L.find(x => x.g === g && x.h === ho);
+      h += '<td>' + (o ? (o.p ? '<i>potenziamento</i>' : o.cl.map(c => `<b>${c}</b>${roomOf(c) !== '' ? ' · aula ' + roomOf(c) : ''}`).join('<br>') + (o.k ? ` <small>(${o.k === 'F' ? 'sost.' : 'sost.'})</small>` : '')) : '') + '</td>';
+    }
+    h += '</tr>';
+  });
+  $('#docGrid').innerHTML = h + '</tbody></table>';
+}
+$('#docSel').addEventListener('change', renderDocenti);
+$('#orFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const X = await loadXlsx(), wb = X.read(await f.arrayBuffer());
+    const ws = wb.Sheets[wb.SheetNames.find(n => /orario/i.test(n)) || wb.SheetNames[0]];
+    const rows = X.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    const L = parseOrario(rows);
+    if (!L.length) throw new Error('nessuna ora di servizio trovata');
+    if (S.orario.length && !await uiConfirm(`Sostituire l'orario dei docenti attuale (${S.orario.length} ore) con ${L.length} ore dal file?`)) return;
+    S.orario = L; save(); renderDocenti(); renderAll();
+    await uiAlert(`Orario importato: ${new Set(L.map(o => o.doc)).size} docenti, ${L.length} ore. I conflitti con le attività indicate per docente compaiono nella Settimana.`);
+  } catch (err) { await uiAlert('Orario non importato: ' + err.message); }
+});
+renderDocenti();
+
 /* ---------- impostazioni ---------- */
 $('#corta').value = S.corta.join(', ');
 $('#saveCorta').addEventListener('click', () => {
@@ -1042,8 +1108,8 @@ $('#importFile').addEventListener('change', async e => {
     const obj = JSON.parse(await f.text());
     if (!obj.rooms || !obj.std || !obj.var) throw new Error('formato');
     obj.perm = obj.perm || [];
-    obj.chiusure = obj.chiusure || []; obj.cal2627 = true;
-    S = obj; save(); fillRoomSelects(); fillMapRooms(); refreshGroups(); refreshPaths(); syncPdfOpts(); $('#corta').value = S.corta.join(', '); renderChiusure(); renderAll();
+    obj.chiusure = obj.chiusure || []; obj.cal2627 = true; obj.orario = obj.orario || [];
+    S = obj; save(); fillRoomSelects(); fillMapRooms(); refreshGroups(); refreshPaths(); syncPdfOpts(); $('#corta').value = S.corta.join(', '); renderChiusure(); renderDocenti(); renderAll();
   } catch (err) { await uiAlert('Backup non valido.'); }
 });
 $('#resetBtn').addEventListener('click', async () => {
