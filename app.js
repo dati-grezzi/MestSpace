@@ -1287,6 +1287,7 @@ function riscData(dal, al) {   // per ogni giorno e zona: finestra di accensione
   }
   return out;
 }
+const avviso = (d, n) => { let x = addDays(d, -n); while (!parseISO(x).getDay()) x = addDays(x, -1); return x; };   // mai di domenica
 function riscHtml(dal, al, soloVar) {
   const R = RISC(), f = d => { const t = parseISO(d); return DAYS[t.getDay()] + ' ' + t.getDate() + '/' + (t.getMonth() + 1); };
   const base = R.da + '–' + R.a;
@@ -1294,18 +1295,46 @@ function riscHtml(dal, al, soloVar) {
   const cell = (c, d, z) => { const dev = c.extra.length; const t = (c.s === toMin(R.da) && c.e === toMin(R.a)) ? base : hmm(c.s) + '–' + hmm(c.e);
     return `<td${c.over ? ' style="background:#ffd6d6"' : dev ? ' style="background:#fff2c9"' : ''}>${t}${dev ? '<br><small>' + [...new Set(c.extra.map(i => esc(i.etichetta) + ' ' + i.dalle + '–' + i.alle + ' (' + esc((room(i.roomId) || {}).numero ?? (room(i.roomId) || {}).nome) + ')'))].join('; ') + '</small>' : ''}${c.over ? '<br><b>oltre ' + R.max + ' h</b>' : ''}</td>`; };
   return `<table class="grid"><thead><tr><th>Giorno</th><th>Comunicare entro</th>${Object.keys(CIRC).map(z => `<th>${CIRC_L[z]}</th>`).join('')}</tr></thead><tbody>` +
-    (rows.map(d => `<tr><th>${f(d.date)}</th><td>${f(addDays(d.date, -R.anticipo))}</td>${Object.keys(CIRC).map(z => cell(d.z[z], d, z)).join('')}</tr>`).join('') || '<tr><td colspan="5">Nessun giorno da mostrare.</td></tr>') +
+    (rows.map(d => `<tr><th>${f(d.date)}</th><td>${f(avviso(d.date, R.anticipo))}</td>${Object.keys(CIRC).map(z => cell(d.z[z], d, z)).join('')}</tr>`).join('') || '<tr><td colspan="5">Nessun giorno da mostrare.</td></tr>') +
     `</tbody></table><p class="hint">Base ${base}; giallo = accensione estesa per attività fuori base; rosso = oltre ${R.max} h al giorno.</p>`;
 }
 $('#rcGo').addEventListener('click', () => {
   const dal = $('#rcDal').value, al = $('#rcAl').value;
   if (!dal || !al || al < dal) { uiAlert('Indica un intervallo di date valido.'); return; }
-  $('#rcOut').innerHTML = riscHtml(dal, al, $('#rcVar').checked);
+  $('#rcOut').innerHTML = riscHtml(dal, al, $('#rcVar').checked); document.body.dataset.rc = '';
+});
+
+// calendario fisso per la ditta: una tabella per settimana, come il loro «Prospetto di funzionamento»
+function calHtml(dal, al) {
+  const R = RISC(), zs = Object.keys(CIRC), mon0 = mondayOf(dal);
+  const M = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'], G = ['', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
+  const fd = d => { const t = parseISO(d); return t.getDate() + ' ' + M[t.getMonth()]; };
+  let out = '';
+  for (let m = mon0; m <= al; m = addDays(m, 7)) {
+    const days = riscData(m, addDays(m, 5));
+    const tr = [1, 2, 3, 4, 5, 6].map(k => {
+      const d = addDays(m, k - 1), r = days.find(x => x.date === d), cl = closureOf(d);
+      if (!r) return `<tr><th>${G[k]} ${fd(d)}</th><td colspan="${zs.length + 2}" style="color:#888">${cl ? 'scuola chiusa · ' + esc(cl.motivo || '') : '—'}</td></tr>`;
+      const ex = zs.flatMap(z => r.z[z].extra);
+      const on = z => r.z[z].extra.length > 0;
+      const cells = zs.map(z => on(z) ? `<td style="color:#c2410c"><b>ACCESO</b><br><small>${[...new Set(r.z[z].extra.map(i => i.dalle + '–' + i.alle))].join(', ')}</small></td>` : '<td style="color:#6b9ac4">SPENTO</td>').join('');
+      const fascia = ex.length ? hmm(Math.min(...ex.map(i => toMin(i.dalle)))) + ' – ' + hmm(Math.max(...ex.map(i => toMin(i.alle)))) : '';
+      const att = [...new Set(ex.map(i => esc(i.etichetta)))].join(', ');
+      return `<tr><th>${G[k]} ${fd(d)}</th>${cells}<td>${fascia}</td><td>${att}</td></tr>`;
+    }).join('');
+    out += `<h4 style="margin:14px 0 4px">Settimana ${fd(m)} – ${fd(addDays(m, 5))}</h4><table class="grid"><thead><tr><th>Giorno</th>${zs.map(z => `<th>${CIRC_L[z]}</th>`).join('')}<th>Fascia oraria</th><th>Attività</th></tr></thead><tbody>${tr}</tbody></table>`;
+  }
+  return out + `<p class="hint">Mattina: accensione base ${R.da}–${R.a}. Qui sono indicate le accensioni aggiuntive (pomeriggi e attività fuori base); variazioni da comunicare almeno ${R.anticipo} giorni prima.</p>`;
+}
+$('#rcCal').addEventListener('click', () => {
+  const dal = $('#rcDal').value, al = $('#rcAl').value;
+  if (!dal || !al || al < dal) { uiAlert('Indica un intervallo di date valido.'); return; }
+  $('#rcOut').innerHTML = calHtml(dal, al); document.body.dataset.rc = 'cal';
 });
 $('#rcPrint').addEventListener('click', () => {
   const dal = $('#rcDal').value, al = $('#rcAl').value;
   if (!dal || !al || al < dal) { uiAlert('Indica un intervallo di date valido.'); return; }
-  $('#printArea').innerHTML = '<div class="pa"><h2>Riscaldamento · programma per la ditta</h2>' + riscHtml(dal, al, $('#rcVar').checked) + '</div>';
+  $('#printArea').innerHTML = '<div class="pa"><h2>Riscaldamento · programma per la ditta</h2>' + (document.body.dataset.rc === 'cal' ? calHtml(dal, al) : riscHtml(dal, al, $('#rcVar').checked)) + '</div>';
   document.body.classList.add('print-sett'); window.print();
 });
 renderZone();
