@@ -1257,7 +1257,16 @@ $('#chiFest').addEventListener('click', () => {
 renderChiusure();
 
 /* ---------- riscaldamento: zone e prospetto per la ditta ---------- */
-const RISC = () => (S.risc = Object.assign({ da: '06:00', a: '12:00', max: 10, pre: 0, anticipo: 2 }, S.risc || {}));
+const RISC = () => {
+  S.risc = Object.assign({ da: '06:00', a: '12:00', max: 10, pre: 0, anticipo: 2 }, S.risc || {});
+  if (!S.risc.fissi) S.risc.fissi = [   // accensioni pomeridiane fisse (da confermare gli orari)
+    { id: 'f1', zona: 'A', giorni: [1, 2, 3, 4, 5], dal: '13:30', al: '18:30', att: 'Musicale' },
+    { id: 'f2', zona: 'A', giorni: [1, 2, 3, 4, 5], dal: '13:30', al: '18:30', att: 'Atrio e segreteria' }];
+  return S.risc;
+};
+const fissiOf = (zs, g) => RISC().fissi.filter(f => zs.includes(f.zona) && f.giorni.includes(g));
+const mergeIv = iv => { const o = []; iv.map(x => [...x]).sort((p, q) => p[0] - q[0]).forEach(x => { const l = o[o.length - 1]; if (l && x[0] <= l[1]) l[1] = Math.max(l[1], x[1]); else o.push(x); }); return o; };
+const ivTxt = iv => iv.map(x => hmm(x[0]) + '–' + hmm(x[1])).join(' + ');
 function renderZone() {
   const R = RISC();
   $('#rcDa').value = R.da; $('#rcA').value = R.a; $('#rcMax').value = R.max; $('#rcPre').value = R.pre; $('#rcAnt').value = R.anticipo;
@@ -1272,17 +1281,21 @@ $('#rcRooms').addEventListener('change', e => { const s = e.target.closest('sele
 const hmm = m => pad(Math.floor(m / 60)) + ':' + pad(m % 60);
 const CIRC = { A: ['A'], B: ['B'], C: ['C'] };   // la richiesta alla ditta è per zona, separata: la gestione dei circuiti spetta a loro
 const CIRC_L = ZONE;
-function riscData(dal, al) {   // per ogni giorno e zona: finestra di accensione
-  const R = RISC(), out = [];
+function zoneDay(zs, g, items) {   // intervalli di accensione di un gruppo di zone in un giorno: base + fissi + attività fuori base
+  const R = RISC(), bs = toMin(R.da), be = toMin(R.a), fx = fissiOf(zs, g).map(f => [toMin(f.dal), toMin(f.al)]), cov = mergeIv([[bs, be], ...fx]);
+  const rs = items.filter(i => zs.includes((room(i.roomId) || {}).zona));
+  const varr = rs.filter(i => { const a = toMin(i.dalle) - R.pre, b = toMin(i.alle); return !cov.some(c => c[0] <= a && c[1] >= b); });
+  const iv = mergeIv([...cov, ...varr.map(i => [toMin(i.dalle) - R.pre, toMin(i.alle)])]);
+  const h = iv.reduce((s, x) => s + (x[1] - x[0]), 0) / 60;
+  return { iv, h, extra: varr, fissi: fissiOf(zs, g), over: h > R.max };
+}
+function riscData(dal, al) {   // per ogni giorno e zona
+  const out = [];
   for (let d = dal; d <= al; d = addDays(d, 1)) {
-    if (!parseISO(d).getDay() || closureOf(d)) continue;
+    const g = parseISO(d).getDay();
+    if (!g || closureOf(d)) continue;
     const it = dayItems(d), day = { date: d, z: {} };
-    Object.entries(CIRC).forEach(([z, zs]) => {
-      const rs = it.filter(i => zs.includes((room(i.roomId) || {}).zona));
-      let s = toMin(R.da), e = toMin(R.a), extra = [];
-      rs.forEach(i => { const a = toMin(i.dalle) - R.pre, b = toMin(i.alle); if (b > e || a < s) extra.push(i); s = Math.min(s, a); e = Math.max(e, b); });
-      day.z[z] = { s, e, h: (e - s) / 60, extra, over: (e - s) / 60 > R.max };
-    });
+    Object.entries(CIRC).forEach(([z, zs]) => { day.z[z] = zoneDay(zs, g, it); });
     out.push(day);
   }
   return out;
@@ -1290,44 +1303,57 @@ function riscData(dal, al) {   // per ogni giorno e zona: finestra di accensione
 const avviso = (d, n) => { let x = addDays(d, -n); while (!parseISO(x).getDay()) x = addDays(x, -1); return x; };   // mai di domenica
 function riscHtml(dal, al, soloVar) {
   const R = RISC(), f = d => { const t = parseISO(d); return DAYS[t.getDay()] + ' ' + t.getDate() + '/' + (t.getMonth() + 1); };
-  const base = R.da + '–' + R.a;
   const rows = riscData(dal, al).filter(d => !soloVar || Object.keys(CIRC).some(z => d.z[z].extra.length));
-  const cell = (c, d, z) => { const dev = c.extra.length; const t = (c.s === toMin(R.da) && c.e === toMin(R.a)) ? base : hmm(c.s) + '–' + hmm(c.e);
-    return `<td${c.over ? ' style="background:#ffd6d6"' : dev ? ' style="background:#fff2c9"' : ''}>${t}${dev ? '<br><small>' + [...new Set(c.extra.map(i => esc(i.etichetta) + ' ' + i.dalle + '–' + i.alle + ' (' + esc((room(i.roomId) || {}).numero ?? (room(i.roomId) || {}).nome) + ')'))].join('; ') + '</small>' : ''}${c.over ? '<br><b>oltre ' + R.max + ' h</b>' : ''}</td>`; };
+  const cell = c => { const dev = c.extra.length;
+    return `<td${c.over ? ' style="background:#ffd6d6"' : dev ? ' style="background:#fff2c9"' : ''}>${ivTxt(c.iv)} <small>(${+c.h.toFixed(1)} h)</small>${dev ? '<br><small>' + [...new Set(c.extra.map(i => esc(i.etichetta) + ' ' + i.dalle + '–' + i.alle + ' (' + esc((room(i.roomId) || {}).numero ?? (room(i.roomId) || {}).nome) + ')'))].join('; ') + '</small>' : ''}${c.over ? '<br><b>oltre ' + R.max + ' h</b>' : ''}</td>`; };
   return `<table class="grid"><thead><tr><th>Giorno</th><th>Comunicare entro</th>${Object.keys(CIRC).map(z => `<th>${CIRC_L[z]}</th>`).join('')}</tr></thead><tbody>` +
-    (rows.map(d => `<tr><th>${f(d.date)}</th><td>${f(avviso(d.date, R.anticipo))}</td>${Object.keys(CIRC).map(z => cell(d.z[z], d, z)).join('')}</tr>`).join('') || '<tr><td colspan="5">Nessun giorno da mostrare.</td></tr>') +
-    `</tbody></table><p class="hint">Base ${base}; giallo = accensione estesa per attività fuori base; rosso = oltre ${R.max} h al giorno.</p>`;
+    (rows.map(d => `<tr><th>${f(d.date)}</th><td>${f(avviso(d.date, R.anticipo))}</td>${Object.keys(CIRC).map(z => cell(d.z[z])).join('')}</tr>`).join('') || '<tr><td colspan="5">Nessun giorno da mostrare.</td></tr>') +
+    `</tbody></table><p class="hint">Base ${R.da}–${R.a} + accensioni fisse (Impostazioni); giallo = attività fuori dalle fasce già accese; rosso = oltre ${R.max} h di accensione al giorno (somma delle fasce).</p>`;
 }
+// calendario fisso (senza date): la settimana tipo = base + accensioni fisse + orario fisso delle aule
+function calFisso() {
+  const R = RISC(), zs = Object.keys(CIRC), G = ['', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'], bs = toMin(R.da), be = toMin(R.a);
+  const tr = [1, 2, 3, 4, 5, 6].map(g => {
+    const it = S.std.filter(x => x.giorno === g), info = [];
+    const cells = zs.map(z => {
+      const c = zoneDay(CIRC[z], g, it), pm = c.iv.filter(x => x[1] > be || x[0] < bs);
+      c.fissi.forEach(f => info.push([f.dal, f.al, f.att])); c.extra.forEach(i => info.push([i.dalle, i.alle, i.etichetta]));
+      return pm.length ? `<td style="color:#c2410c"><b>ACCESO</b><br><small>${ivTxt(pm)}</small>${c.over ? '<br><small>oltre ' + R.max + ' h</small>' : ''}</td>` : '<td style="color:#6b9ac4">SPENTO</td>';
+    }).join('');
+    const fascia = info.length ? info.map(x => x[0]).sort()[0] + ' – ' + info.map(x => x[1]).sort().slice(-1)[0] : '';
+    return `<tr><th>${G[g]}</th>${cells}<td>${fascia}</td><td>${[...new Set(info.map(x => esc(x[2])))].join(', ')}</td></tr>`;
+  }).join('');
+  return `<h4 style="margin:6px 0">Calendario fisso · settimana tipo</h4><table class="grid"><thead><tr><th>Giorno</th>${zs.map(z => `<th>${CIRC_L[z]}</th>`).join('')}<th>Fascia oraria</th><th>Attività</th></tr></thead><tbody>${tr}</tbody></table>` +
+    `<p class="hint">Ogni settimana, salvo variazioni: mattina ${R.da}–${R.a}; qui le accensioni oltre la base. Le variazioni puntuali vanno comunicate almeno ${R.anticipo} giorni prima, con il prospetto per date.</p>`;
+}
+$('#rcCal').addEventListener('click', () => { $('#rcOut').innerHTML = calFisso(); document.body.dataset.rc = 'cal'; });
 $('#rcGo').addEventListener('click', () => {
   const dal = $('#rcDal').value, al = $('#rcAl').value;
   if (!dal || !al || al < dal) { uiAlert('Indica un intervallo di date valido.'); return; }
   $('#rcOut').innerHTML = riscHtml(dal, al, $('#rcVar').checked); document.body.dataset.rc = '';
 });
 
-// calendario fisso (senza date): la settimana tipo, dall'orario fisso delle aule
-function calFisso() {
-  const R = RISC(), zs = Object.keys(CIRC), G = ['', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'], be = toMin(R.a), bs = toMin(R.da);
-  const tr = [1, 2, 3, 4, 5, 6].map(g => {
-    const it = S.std.filter(x => x.giorno === g), ex = [];
-    const cells = zs.map(z => {
-      const e = it.filter(i => (room(i.roomId) || {}).zona === z && (toMin(i.alle) > be || toMin(i.dalle) - R.pre < bs));
-      e.forEach(i => ex.push(i));
-      return e.length ? `<td style="color:#c2410c"><b>ACCESO</b><br><small>${[...new Set(e.map(i => i.dalle + '–' + i.alle))].join(', ')}</small></td>` : '<td style="color:#6b9ac4">SPENTO</td>';
-    }).join('');
-    const fascia = ex.length ? hmm(Math.min(...ex.map(i => toMin(i.dalle)))) + ' – ' + hmm(Math.max(...ex.map(i => toMin(i.alle)))) : '';
-    return `<tr><th>${G[g]}</th>${cells}<td>${fascia}</td><td>${[...new Set(ex.map(i => esc(i.etichetta)))].join(', ')}</td></tr>`;
-  }).join('');
-  return `<h4 style="margin:6px 0">Calendario fisso · settimana tipo</h4><table class="grid"><thead><tr><th>Giorno</th>${zs.map(z => `<th>${CIRC_L[z]}</th>`).join('')}<th>Fascia oraria</th><th>Attività</th></tr></thead><tbody>${tr}</tbody></table>` +
-    `<p class="hint">Ogni settimana, salvo variazioni: accensione base ${R.da}–${R.a}; qui le accensioni fisse oltre la base (da orario fisso delle aule). Le variazioni puntuali vanno comunicate almeno ${R.anticipo} giorni prima, con il prospetto per date.</p>`;
-}
-$('#rcCal').addEventListener('click', () => { $('#rcOut').innerHTML = calFisso(); document.body.dataset.rc = 'cal'; });
 $('#rcPrint').addEventListener('click', () => {
   const dal = $('#rcDal').value, al = $('#rcAl').value, fisso = document.body.dataset.rc === 'cal';
   if (!fisso && (!dal || !al || al < dal)) { uiAlert('Indica un intervallo di date valido.'); return; }
   $('#printArea').innerHTML = '<div class="pa"><h2>Riscaldamento · programma per la ditta</h2>' + (fisso ? calFisso() : riscHtml(dal, al, $('#rcVar').checked)) + '</div>';
   document.body.classList.add('print-sett'); window.print();
 });
-renderZone();
+function renderFissi() {
+  const R = RISC(), Z = ['A', 'B', 'C'], D = ['L', 'M', 'M', 'G', 'V', 'S'];
+  $('#rcFissi').innerHTML = R.fissi.map(f => `<div class="chi" data-f="${f.id}"><select data-k="zona">${Z.map(z => `<option${f.zona === z ? ' selected' : ''}>${z}</option>`).join('')}</select> ` +
+    D.map((d, i) => `<label><input type="checkbox" data-g="${i + 1}"${f.giorni.includes(i + 1) ? ' checked' : ''}>${d}</label>`).join('') +
+    ` <input type="time" data-k="dal" value="${f.dal}"> – <input type="time" data-k="al" value="${f.al}"> <input data-k="att" value="${esc(f.att)}" size="18"> <button data-del="${f.id}">✕</button></div>`).join('');
+}
+$('#rcFissi').addEventListener('change', e => {
+  const row = e.target.closest('[data-f]'); if (!row) return; const f = RISC().fissi.find(x => x.id === row.dataset.f); if (!f) return;
+  if (e.target.dataset.g) { const g = +e.target.dataset.g; f.giorni = e.target.checked ? [...new Set([...f.giorni, g])].sort() : f.giorni.filter(x => x !== g); }
+  else if (e.target.dataset.k) f[e.target.dataset.k] = e.target.value;
+  save();
+});
+$('#rcFissi').addEventListener('click', e => { const b = e.target.closest('button[data-del]'); if (!b) return; RISC().fissi = RISC().fissi.filter(x => x.id !== b.dataset.del); save(); renderFissi(); });
+$('#rcFissoAdd').addEventListener('click', () => { RISC().fissi.push({ id: uid(), zona: 'A', giorni: [1, 2, 3, 4, 5], dal: '13:30', al: '18:30', att: '' }); save(); renderFissi(); });
+renderZone(); renderFissi();
 $('#exportBtn').addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');

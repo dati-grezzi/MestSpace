@@ -415,6 +415,8 @@
       <label>preriscaldamento (min) <input type="number" id="rcPre" min="0" max="240" style="width:4em"></label>
       <label>preavviso (giorni) <input type="number" id="rcAnt" min="0" max="30" style="width:4em"></label>
     </div>
+    <div><b>Accensioni fisse oltre la base:</b> <button id="rcFissoAdd">+ Aggiungi</button></div>
+    <div id="rcFissi"></div>
     <details><summary>Zona di ogni locale</summary><div id="rcRooms"></div></details>
     <div class="bar">
       <label>dal <input type="date" id="rcDal"></label><label>al <input type="date" id="rcAl"></label>
@@ -503,6 +505,6 @@
     <div class="aepane"><div class="aeh">Mappa aerea <button id="aeZaOut">−</button><button id="aeZaIn">+</button></div><div class="aesc"><div id="aeAw"><canvas id="aeAc"></canvas></div></div></div>
   </div>
 </div>
-<script src="app.js?v=20261106f"></script>
+<script src="app.js?v=20261106g"></script>
 </body>
 </html>
