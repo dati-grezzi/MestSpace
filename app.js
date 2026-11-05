@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-11-05 · allineamento per punti';
+const VERSION = '2026-11-06 · zone riscaldamento';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -110,10 +110,22 @@ const CHIUSURE_2627 = () => [
   ['2027-05-01', '2027-05-01', 'Festa del lavoro'],
   ['2027-06-02', '2027-06-02', 'Festa della Repubblica']
 ].map(([dal, al, motivo], i) => ({ id: 'cal' + i, dal, al, motivo }));
+// zone del riscaldamento (la ditta ragiona per macro-aree, ciascuna su entrambi i piani)
+const ZONE = { A: 'A · Atrio e segreteria', B: 'B · Aule nuove (lato Coop, via Verga)', C: 'C · Aule vecchie (via Quasimodo)' };
+const zonaDefault = r => {
+  const n = r.numero;
+  if (n === 1 || n === 17) return 'A';
+  if (n >= 2 && n <= 10 && r.piano === 'terra') return 'B';
+  if (n >= 18 && n <= 27 && r.piano === 'primo') return 'B';
+  if (n >= 11 && n <= 16) return 'C';
+  if (r.tipo === 'ufficio' && r.piano === 'terra') return 'C';
+  return '';
+};
 function fresh() {
   return {
     v: 1,
-    rooms: SEED.map(([piano, numero, nome, tipo, note]) => ({ id: roomKey(piano, numero, nome), piano, numero, nome, tipo, note, cap: CAP[numero]?.[0] ?? null, mq: CAP[numero]?.[1] ?? null })),
+    rooms: SEED.map(([piano, numero, nome, tipo, note]) => { const r = { id: roomKey(piano, numero, nome), piano, numero, nome, tipo, note, cap: CAP[numero]?.[0] ?? null, mq: CAP[numero]?.[1] ?? null }; r.zona = zonaDefault(r); return r; }),
+    zoneInit: true,
     std: [],          // assegnazioni standard (settimana tipo)
     var: [],          // variazioni con periodo dal/al
     perm: [],         // assegnazioni fisse (permanenti), senza giorno né orario
@@ -133,6 +145,7 @@ function load() {
       if (!s.cal2627) { CHIUSURE_2627().forEach(c => { if (!s.chiusure.some(x => x.dal <= c.al && c.dal <= (x.al || x.dal))) s.chiusure.push(c); }); s.cal2627 = true; }   // una tantum: calendario 2026/27
       Object.values(s.plans || {}).forEach(pl => { if (pl.paths) pl.paths = pl.paths.filter(x => x.pts && x.pts.length >= 2); });   // niente percorsi fantasma
       SEED.forEach(([piano, numero, nome, tipo, note]) => { const id = roomKey(piano, numero, nome); if (!s.rooms.some(r => r.id === id)) s.rooms.push({ id, piano, numero, nome, tipo, note, cap: CAP[numero]?.[0] ?? null, mq: CAP[numero]?.[1] ?? null }); });
+      if (!s.zoneInit) { s.rooms.forEach(r => { r.zona = zonaDefault(r); }); s.zoneInit = true; }
       s.rooms.forEach(r => { if (r.cap === undefined && CAP[r.numero]) { r.cap = CAP[r.numero][0]; r.mq = CAP[r.numero][1]; } });
       return s;
     }
@@ -1239,6 +1252,58 @@ $('#chiFest').addEventListener('click', () => {
   save(); renderChiusure(); renderAll();
 });
 renderChiusure();
+
+/* ---------- riscaldamento: zone e prospetto per la ditta ---------- */
+const RISC = () => (S.risc = Object.assign({ da: '06:00', a: '12:00', max: 10, pre: 0, anticipo: 2 }, S.risc || {}));
+function renderZone() {
+  const R = RISC();
+  $('#rcDa').value = R.da; $('#rcA').value = R.a; $('#rcMax').value = R.max; $('#rcPre').value = R.pre; $('#rcAnt').value = R.anticipo;
+  const opt = z => ['', 'A', 'B', 'C'].map(k => `<option value="${k}"${z === k ? ' selected' : ''}>${k ? ZONE[k] : '— esclusa —'}</option>`).join('');
+  $('#rcRooms').innerHTML = '<table class="grid"><thead><tr><th>N.</th><th>Locale</th><th>Piano</th><th>Zona</th></tr></thead><tbody>' +
+    S.rooms.map(r => `<tr><th class="rn">${esc(r.numero ?? '')}</th><td>${esc(r.nome)}</td><td>${r.piano}</td><td><select data-zr="${r.id}">${opt(r.zona || '')}</select></td></tr>`).join('') + '</tbody></table>';
+}
+$('#rcRooms').addEventListener('change', e => { const s = e.target.closest('select[data-zr]'); if (!s) return; const r = room(s.dataset.zr); if (r) { r.zona = s.value; save(); } });
+['rcDa', 'rcA', 'rcMax', 'rcPre', 'rcAnt'].forEach(id => $('#' + id).addEventListener('change', () => {
+  const R = RISC(); R.da = $('#rcDa').value || '06:00'; R.a = $('#rcA').value || '12:00'; R.max = +$('#rcMax').value || 10; R.pre = +$('#rcPre').value || 0; R.anticipo = +$('#rcAnt').value || 0; save();
+}));
+const hmm = m => pad(Math.floor(m / 60)) + ':' + pad(m % 60);
+function riscData(dal, al) {   // per ogni giorno e zona: finestra di accensione
+  const R = RISC(), out = [];
+  for (let d = dal; d <= al; d = addDays(d, 1)) {
+    if (!parseISO(d).getDay() || closureOf(d)) continue;
+    const it = dayItems(d), day = { date: d, z: {} };
+    ['A', 'B', 'C'].forEach(z => {
+      const rs = it.filter(i => (room(i.roomId) || {}).zona === z);
+      let s = toMin(R.da), e = toMin(R.a), extra = [];
+      rs.forEach(i => { const a = toMin(i.dalle) - R.pre, b = toMin(i.alle); if (b > e || a < s) extra.push(i); s = Math.min(s, a); e = Math.max(e, b); });
+      day.z[z] = { s, e, h: (e - s) / 60, extra, over: (e - s) / 60 > R.max };
+    });
+    out.push(day);
+  }
+  return out;
+}
+function riscHtml(dal, al, soloVar) {
+  const R = RISC(), f = d => { const t = parseISO(d); return DAYS[t.getDay()] + ' ' + t.getDate() + '/' + (t.getMonth() + 1); };
+  const base = R.da + '–' + R.a;
+  const rows = riscData(dal, al).filter(d => !soloVar || ['A', 'B', 'C'].some(z => d.z[z].extra.length));
+  const cell = (c, d, z) => { const dev = c.extra.length; const t = (c.s === toMin(R.da) && c.e === toMin(R.a)) ? base : hmm(c.s) + '–' + hmm(c.e);
+    return `<td${c.over ? ' style="background:#ffd6d6"' : dev ? ' style="background:#fff2c9"' : ''}>${t}${dev ? '<br><small>' + [...new Set(c.extra.map(i => esc(i.etichetta) + ' ' + i.dalle + '–' + i.alle + ' (' + esc((room(i.roomId) || {}).numero ?? (room(i.roomId) || {}).nome) + ')'))].join('; ') + '</small>' : ''}${c.over ? '<br><b>oltre ' + R.max + ' h</b>' : ''}</td>`; };
+  return `<table class="grid"><thead><tr><th>Giorno</th><th>Comunicare entro</th>${['A', 'B', 'C'].map(z => `<th>${ZONE[z]}</th>`).join('')}</tr></thead><tbody>` +
+    (rows.map(d => `<tr><th>${f(d.date)}</th><td>${f(addDays(d.date, -R.anticipo))}</td>${['A', 'B', 'C'].map(z => cell(d.z[z], d, z)).join('')}</tr>`).join('') || '<tr><td colspan="5">Nessun giorno da mostrare.</td></tr>') +
+    `</tbody></table><p class="hint">Base ${base}; giallo = accensione estesa per attività fuori base; rosso = oltre ${R.max} h al giorno.</p>`;
+}
+$('#rcGo').addEventListener('click', () => {
+  const dal = $('#rcDal').value, al = $('#rcAl').value;
+  if (!dal || !al || al < dal) { uiAlert('Indica un intervallo di date valido.'); return; }
+  $('#rcOut').innerHTML = riscHtml(dal, al, $('#rcVar').checked);
+});
+$('#rcPrint').addEventListener('click', () => {
+  const dal = $('#rcDal').value, al = $('#rcAl').value;
+  if (!dal || !al || al < dal) { uiAlert('Indica un intervallo di date valido.'); return; }
+  $('#printArea').innerHTML = '<div class="pa"><h2>Riscaldamento · programma per la ditta</h2>' + riscHtml(dal, al, $('#rcVar').checked) + '</div>';
+  document.body.classList.add('print-sett'); window.print();
+});
+renderZone();
 $('#exportBtn').addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');

@@ -409,6 +409,20 @@
     <div id="chiList"></div>
     <p class="hint">In questi giorni le attività sono sospese: non compaiono in Settimana, Report e stampe e non generano conflitti. Per un solo giorno basta la data iniziale.</p>
     <div class="bar">
+      <b>Riscaldamento (zone):</b>
+      <label>base dalle <input type="time" id="rcDa"></label><label>alle <input type="time" id="rcA"></label>
+      <label>max ore/giorno <input type="number" id="rcMax" min="1" max="24" style="width:4em"></label>
+      <label>preriscaldamento (min) <input type="number" id="rcPre" min="0" max="240" style="width:4em"></label>
+      <label>preavviso (giorni) <input type="number" id="rcAnt" min="0" max="30" style="width:4em"></label>
+    </div>
+    <details><summary>Zona di ogni locale</summary><div id="rcRooms"></div></details>
+    <div class="bar">
+      <label>dal <input type="date" id="rcDal"></label><label>al <input type="date" id="rcAl"></label>
+      <label><input type="checkbox" id="rcVar" checked> solo giorni con variazioni</label>
+      <button id="rcGo">Mostra prospetto</button><button id="rcPrint">Stampa</button>
+    </div>
+    <div id="rcOut"></div>
+    <div class="bar">
       <b>Orario dei docenti:</b>
       <label>Importa (Excel) <input type="file" id="orFile" accept=".xlsx,.xls"></label>
       <label>Docente <select id="docSel"></select></label>
@@ -489,6 +503,6 @@
     <div class="aepane"><div class="aeh">Mappa aerea <button id="aeZaOut">−</button><button id="aeZaIn">+</button></div><div class="aesc"><div id="aeAw"><canvas id="aeAc"></canvas></div></div></div>
   </div>
 </div>
-<script src="app.js?v=20261105b"></script>
+<script src="app.js?v=20261106a"></script>
 </body>
 </html>
