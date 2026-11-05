@@ -1270,13 +1270,15 @@ $('#rcRooms').addEventListener('change', e => { const s = e.target.closest('sele
   const R = RISC(); R.da = $('#rcDa').value || '06:00'; R.a = $('#rcA').value || '12:00'; R.max = +$('#rcMax').value || 10; R.pre = +$('#rcPre').value || 0; R.anticipo = +$('#rcAnt').value || 0; save();
 }));
 const hmm = m => pad(Math.floor(m / 60)) + ':' + pad(m % 60);
+const CIRC = { AC: ['A', 'C'], B: ['B'] };   // A e C viaggiano insieme (stesso circuito): musica (aula 17, zona A) è quindi sempre accesa con C
+const CIRC_L = { AC: 'A + C · Atrio, segreteria, uffici, aule 11–16', B: 'B · Aule nuove (lato Coop, via Verga)' };
 function riscData(dal, al) {   // per ogni giorno e zona: finestra di accensione
   const R = RISC(), out = [];
   for (let d = dal; d <= al; d = addDays(d, 1)) {
     if (!parseISO(d).getDay() || closureOf(d)) continue;
     const it = dayItems(d), day = { date: d, z: {} };
-    ['A', 'B', 'C'].forEach(z => {
-      const rs = it.filter(i => (room(i.roomId) || {}).zona === z);
+    Object.entries(CIRC).forEach(([z, zs]) => {
+      const rs = it.filter(i => zs.includes((room(i.roomId) || {}).zona));
       let s = toMin(R.da), e = toMin(R.a), extra = [];
       rs.forEach(i => { const a = toMin(i.dalle) - R.pre, b = toMin(i.alle); if (b > e || a < s) extra.push(i); s = Math.min(s, a); e = Math.max(e, b); });
       day.z[z] = { s, e, h: (e - s) / 60, extra, over: (e - s) / 60 > R.max };
@@ -1288,12 +1290,12 @@ function riscData(dal, al) {   // per ogni giorno e zona: finestra di accensione
 function riscHtml(dal, al, soloVar) {
   const R = RISC(), f = d => { const t = parseISO(d); return DAYS[t.getDay()] + ' ' + t.getDate() + '/' + (t.getMonth() + 1); };
   const base = R.da + '–' + R.a;
-  const rows = riscData(dal, al).filter(d => !soloVar || ['A', 'B', 'C'].some(z => d.z[z].extra.length));
+  const rows = riscData(dal, al).filter(d => !soloVar || Object.keys(CIRC).some(z => d.z[z].extra.length));
   const cell = (c, d, z) => { const dev = c.extra.length; const t = (c.s === toMin(R.da) && c.e === toMin(R.a)) ? base : hmm(c.s) + '–' + hmm(c.e);
     return `<td${c.over ? ' style="background:#ffd6d6"' : dev ? ' style="background:#fff2c9"' : ''}>${t}${dev ? '<br><small>' + [...new Set(c.extra.map(i => esc(i.etichetta) + ' ' + i.dalle + '–' + i.alle + ' (' + esc((room(i.roomId) || {}).numero ?? (room(i.roomId) || {}).nome) + ')'))].join('; ') + '</small>' : ''}${c.over ? '<br><b>oltre ' + R.max + ' h</b>' : ''}</td>`; };
-  return `<table class="grid"><thead><tr><th>Giorno</th><th>Comunicare entro</th>${['A', 'B', 'C'].map(z => `<th>${ZONE[z]}</th>`).join('')}</tr></thead><tbody>` +
-    (rows.map(d => `<tr><th>${f(d.date)}</th><td>${f(addDays(d.date, -R.anticipo))}</td>${['A', 'B', 'C'].map(z => cell(d.z[z], d, z)).join('')}</tr>`).join('') || '<tr><td colspan="5">Nessun giorno da mostrare.</td></tr>') +
-    `</tbody></table><p class="hint">Base ${base}; giallo = accensione estesa per attività fuori base; rosso = oltre ${R.max} h al giorno.</p>`;
+  return `<table class="grid"><thead><tr><th>Giorno</th><th>Comunicare entro</th>${Object.keys(CIRC).map(z => `<th>${CIRC_L[z]}</th>`).join('')}</tr></thead><tbody>` +
+    (rows.map(d => `<tr><th>${f(d.date)}</th><td>${f(addDays(d.date, -R.anticipo))}</td>${Object.keys(CIRC).map(z => cell(d.z[z], d, z)).join('')}</tr>`).join('') || '<tr><td colspan="5">Nessun giorno da mostrare.</td></tr>') +
+    `</tbody></table><p class="hint">Base ${base}; A e C sono sullo stesso circuito (aula 17 sempre accesa); giallo = accensione estesa per attività fuori base; rosso = oltre ${R.max} h al giorno.</p>`;
 }
 $('#rcGo').addEventListener('click', () => {
   const dal = $('#rcDal').value, al = $('#rcAl').value;
