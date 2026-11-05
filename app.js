@@ -1286,8 +1286,14 @@ function zoneDay(zs, g, items) {   // intervalli di accensione di un gruppo di z
   const rs = items.filter(i => zs.includes((room(i.roomId) || {}).zona));
   const varr = rs.filter(i => { const a = toMin(i.dalle) - R.pre, b = toMin(i.alle); return !cov.some(c => c[0] <= a && c[1] >= b); });
   const iv = mergeIv([...cov, ...varr.map(i => [toMin(i.dalle) - R.pre, toMin(i.alle)])]);
-  const h = iv.reduce((s, x) => s + (x[1] - x[0]), 0) / 60;
-  return { iv, h, extra: varr, fissi: fissiOf(zs, g), over: h > R.max };
+  const tot = () => iv.reduce((s, x) => s + (x[1] - x[0]), 0) / 60;
+  let rid = null;
+  if (tot() > R.max) {   // oltre il limite: si accorcia la mattina ritardando l'accensione, ma non oltre l'inizio delle lezioni (08:05)
+    const lim = toMin(SCAN[0][1]), cut = Math.min((tot() - R.max) * 60, Math.max(0, Math.min(iv[0][1], lim) - iv[0][0]));
+    if (cut > 0) { iv[0][0] += cut; rid = iv[0][0]; }
+  }
+  const h = tot();
+  return { iv, h, extra: varr, fissi: fissiOf(zs, g), over: h > R.max + 1e-9, rid };
 }
 function riscData(dal, al) {   // per ogni giorno e zona
   const out = [];
@@ -1305,7 +1311,7 @@ function riscHtml(dal, al, soloVar) {
   const R = RISC(), f = d => { const t = parseISO(d); return DAYS[t.getDay()] + ' ' + t.getDate() + '/' + (t.getMonth() + 1); };
   const rows = riscData(dal, al).filter(d => !soloVar || Object.keys(CIRC).some(z => d.z[z].extra.length));
   const cell = c => { const dev = c.extra.length;
-    return `<td${c.over ? ' style="background:#ffd6d6"' : dev ? ' style="background:#fff2c9"' : ''}>${ivTxt(c.iv)} <small>(${+c.h.toFixed(1)} h)</small>${dev ? '<br><small>' + [...new Set(c.extra.map(i => esc(i.etichetta) + ' ' + i.dalle + '–' + i.alle + ' (' + esc((room(i.roomId) || {}).numero ?? (room(i.roomId) || {}).nome) + ')'))].join('; ') + '</small>' : ''}${c.over ? '<br><b>oltre ' + R.max + ' h</b>' : ''}</td>`; };
+    return `<td${c.over ? ' style="background:#ffd6d6"' : dev || c.rid != null ? ' style="background:#fff2c9"' : ''}>${ivTxt(c.iv)} <small>(${+c.h.toFixed(1)} h)</small>${dev ? '<br><small>' + [...new Set(c.extra.map(i => esc(i.etichetta) + ' ' + i.dalle + '–' + i.alle + ' (' + esc((room(i.roomId) || {}).numero ?? (room(i.roomId) || {}).nome) + ')'))].join('; ') + '</small>' : ''}${c.rid != null ? '<br><small>mattina ridotta per il limite di ' + R.max + ' h</small>' : ''}${c.over ? '<br><b>oltre ' + R.max + ' h</b>' : ''}</td>`; };
   return `<table class="grid"><thead><tr><th>Giorno</th><th>Comunicare entro</th>${Object.keys(CIRC).map(z => `<th>${CIRC_L[z]}</th>`).join('')}</tr></thead><tbody>` +
     (rows.map(d => `<tr><th>${f(d.date)}</th><td>${f(avviso(d.date, R.anticipo))}</td>${Object.keys(CIRC).map(z => cell(d.z[z])).join('')}</tr>`).join('') || '<tr><td colspan="5">Nessun giorno da mostrare.</td></tr>') +
     `</tbody></table><p class="hint">Base ${R.da}–${R.a} + accensioni fisse (Impostazioni); giallo = attività fuori dalle fasce già accese; rosso = oltre ${R.max} h di accensione al giorno (somma delle fasce).</p>`;
@@ -1318,7 +1324,7 @@ function calFisso() {
     const cells = zs.map(z => {
       const c = zoneDay(CIRC[z], g, it), pm = c.iv.filter(x => x[1] > be || x[0] < bs);
       c.fissi.forEach(f => info.push([f.dal, f.al, f.att])); c.extra.forEach(i => info.push([i.dalle, i.alle, i.etichetta]));
-      return pm.length ? `<td style="color:#c2410c"><b>ACCESO</b><br><small>${ivTxt(pm)}</small>${c.over ? '<br><small>oltre ' + R.max + ' h</small>' : ''}</td>` : '<td style="color:#6b9ac4">SPENTO</td>';
+      return pm.length ? `<td style="color:#c2410c"><b>ACCESO</b><br><small>${ivTxt(pm)}</small>${c.rid != null ? '<br><small>mattina dalle ' + hmm(c.rid) + '</small>' : ''}${c.over ? '<br><small>oltre ' + R.max + ' h</small>' : ''}</td>` : '<td style="color:#6b9ac4">SPENTO</td>';
     }).join('');
     const fascia = info.length ? info.map(x => x[0]).sort()[0] + ' – ' + info.map(x => x[1]).sort().slice(-1)[0] : '';
     return `<tr><th>${G[g]}</th>${cells}<td>${fascia}</td><td>${[...new Set(info.map(x => esc(x[2])))].join(', ')}</td></tr>`;
