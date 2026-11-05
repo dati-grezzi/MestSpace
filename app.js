@@ -118,14 +118,15 @@ const zonaDefault = r => {
   if (n >= 2 && n <= 10 && r.piano === 'terra') return 'B';
   if (n >= 18 && n <= 27 && r.piano === 'primo') return 'B';
   if (n >= 11 && n <= 16) return 'C';
-  if (r.tipo === 'ufficio' && r.piano === 'terra') return 'C';
+  if (['Presidenza', 'Segreteria', 'Ufficio collaboratori DS'].includes(r.nome)) return 'A';
+  if (r.piano === 'terra' && (r.tipo === 'ufficio' || r.nome === 'Aula tecnici')) return 'C';
   return '';
 };
 function fresh() {
   return {
     v: 1,
     rooms: SEED.map(([piano, numero, nome, tipo, note]) => { const r = { id: roomKey(piano, numero, nome), piano, numero, nome, tipo, note, cap: CAP[numero]?.[0] ?? null, mq: CAP[numero]?.[1] ?? null }; r.zona = zonaDefault(r); return r; }),
-    zoneInit: true,
+    zoneInit: true, zoneV: 2,
     std: [],          // assegnazioni standard (settimana tipo)
     var: [],          // variazioni con periodo dal/al
     perm: [],         // assegnazioni fisse (permanenti), senza giorno né orario
@@ -145,6 +146,8 @@ function load() {
       if (!s.cal2627) { CHIUSURE_2627().forEach(c => { if (!s.chiusure.some(x => x.dal <= c.al && c.dal <= (x.al || x.dal))) s.chiusure.push(c); }); s.cal2627 = true; }   // una tantum: calendario 2026/27
       Object.values(s.plans || {}).forEach(pl => { if (pl.paths) pl.paths = pl.paths.filter(x => x.pts && x.pts.length >= 2); });   // niente percorsi fantasma
       SEED.forEach(([piano, numero, nome, tipo, note]) => { const id = roomKey(piano, numero, nome); if (!s.rooms.some(r => r.id === id)) s.rooms.push({ id, piano, numero, nome, tipo, note, cap: CAP[numero]?.[0] ?? null, mq: CAP[numero]?.[1] ?? null }); });
+      if (s.zoneInit && s.zoneV !== 2) { s.rooms.forEach(r => { if (['Presidenza', 'Segreteria', 'Ufficio collaboratori DS', 'Aula tecnici'].includes(r.nome)) r.zona = zonaDefault(r); }); }
+      s.zoneV = 2;
       if (!s.zoneInit) { s.rooms.forEach(r => { r.zona = zonaDefault(r); }); s.zoneInit = true; }
       s.rooms.forEach(r => { if (r.cap === undefined && CAP[r.numero]) { r.cap = CAP[r.numero][0]; r.mq = CAP[r.numero][1]; } });
       return s;
