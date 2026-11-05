@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-11-05 · mappa aerea';
+const VERSION = '2026-11-05 · allineamento per punti';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -374,7 +374,7 @@ async function loadAerea() {
   return aeImg;
 }
 const AE_DEF = { x: 0, y: 0, s: 1, r: 0, o: 0.5, vis: true, lock: false, print: false };
-const aeOf = p => (p.aerea = Object.assign({}, AE_DEF, p.aerea || {}));
+const aeOf = p => (p.aerea = Object.assign(p.aerea || {}, Object.fromEntries(Object.entries(AE_DEF).filter(([k]) => !p.aerea || !(k in p.aerea)))));
 let aeDrag = null;
 
 // Etichetta sulla pianta: classe/attività assegnata, altrimenti nome del locale (senza numero)
@@ -520,10 +520,16 @@ async function drawPlan() {
   if (aim) {   // mappa aerea sotto: la planimetria viene «moltiplicata», così il suo bianco lascia vedere la foto
     ctx.save();
     ctx.globalAlpha = ae.o;
-    ctx.translate(W / 2 + ae.x * W, H / 2 + ae.y * H);
-    ctx.rotate(ae.r * Math.PI / 180);
-    const aw = W * ae.s, ah = aw * aim.height / aim.width;
-    ctx.drawImage(aim, -aw / 2, -ah / 2, aw, ah);
+    if (ae.M && ae.rotRef === (p.rot || 0)) {   // allineamento per punti: trasformazione affine calcolata
+      const [A, B, C, D, E, F] = ae.M;
+      ctx.setTransform(A * W / aim.width, B * H / aim.width, C * W / aim.height, D * H / aim.height, E * W, F * H);
+      ctx.drawImage(aim, 0, 0);
+    } else {
+      ctx.translate(W / 2 + ae.x * W, H / 2 + ae.y * H);
+      ctx.rotate(ae.r * Math.PI / 180);
+      const aw = W * ae.s, ah = aw * aim.height / aim.width;
+      ctx.drawImage(aim, -aw / 2, -ah / 2, aw, ah);
+    }
     ctx.restore();
   }
   ctx.save();
@@ -658,7 +664,7 @@ function syncAerea() {
   $('#aeOpV').textContent = Math.round(ae.o * 100) + '%'; $('#aeScaleV').textContent = Math.round(ae.s * 100) + '%'; $('#aeRotV').value = (+ae.r).toFixed(1);
   loadAerea().then(i => { $('#aeInfo').textContent = i ? `Mappa caricata (${i.width}×${i.height}). «Sposta mappa» per trascinarla; rotella del mouse per ingrandire.` : 'Nessuna mappa aerea: carica un\'immagine.'; });
 }
-const aeSet = fn => { const ae = aeOf(curPlan()); if (ae.lock) { syncAerea(); return; } fn(ae); save(); syncAerea(); drawPlan(); };
+const aeSet = fn => { const ae = aeOf(curPlan()); if (ae.lock) { syncAerea(); return; } if (ae.M) delete ae.M; fn(ae); save(); syncAerea(); drawPlan(); };
 $('#aeFile').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
   await idbPut('aerea', f); aeImg = undefined; syncAerea(); drawPlan();
@@ -672,10 +678,83 @@ $('#aeScale').addEventListener('input', () => aeSet(ae => { ae.s = $('#aeScale')
 $('#aeRot').addEventListener('input', () => aeSet(ae => { ae.r = +$('#aeRot').value; }));
 $('#aeRotV').addEventListener('change', () => aeSet(ae => { ae.r = Math.max(-180, Math.min(180, +$('#aeRotV').value || 0)); }));
 document.querySelectorAll('[data-aerot]').forEach(b => b.addEventListener('click', () => aeSet(ae => { ae.r = Math.round(((+ae.r + +b.dataset.aerot + 540) % 360 - 180) * 10) / 10; })));
-$('#aeReset').addEventListener('click', () => aeSet(ae => Object.assign(ae, { x: 0, y: 0, s: 1, r: 0 })));
+$('#aeReset').addEventListener('click', () => aeSet(ae => { Object.assign(ae, { x: 0, y: 0, s: 1, r: 0 }); delete ae.M; }));
 $('#aeDel').addEventListener('click', async () => {
   if (!await uiConfirm('Rimuovere la mappa aerea (vale per entrambi i piani)?')) return;
   await idbPut('aerea', null); aeImg = undefined; syncAerea(); drawPlan();
+});
+
+/* ---------- allineamento della mappa aerea per punti noti ---------- */
+const aeDlg = { z: [1, 1], draft: null };
+function lsq(P, Q, mode) {   // P: punti mappa (px), Q: punti pianta (px) -> [a,b,c,d,e,f]: X=a·u+c·v+e, Y=b·u+d·v+f
+  const n = P.length, mx = P.reduce((s, p) => s + p[0], 0) / n, my = P.reduce((s, p) => s + p[1], 0) / n, qx = Q.reduce((s, p) => s + p[0], 0) / n, qy = Q.reduce((s, p) => s + p[1], 0) / n;
+  if (mode === 'sim') {
+    let sr = 0, si = 0, sa = 0;
+    P.forEach((p, i) => { const ux = p[0] - mx, uy = p[1] - my, vx = Q[i][0] - qx, vy = Q[i][1] - qy; sr += ux * vx + uy * vy; si += ux * vy - uy * vx; sa += ux * ux + uy * uy; });
+    const kr = sr / sa, ki = si / sa;
+    return [kr, ki, -ki, kr, qx - (kr * mx - ki * my), qy - (ki * mx + kr * my)];
+  }
+  // affine: minimi quadrati su (u,v,1)
+  const solve3 = (M, y) => { const d = (m) => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    const D = d(M); return [0, 1, 2].map(k => d(M.map((r, i) => r.map((v, j) => (j === k ? y[i] : v)))) / D); };
+  const M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], bx = [0, 0, 0], by = [0, 0, 0];
+  P.forEach((p, i) => { const r = [p[0], p[1], 1]; for (let a = 0; a < 3; a++) { for (let b = 0; b < 3; b++) M[a][b] += r[a] * r[b]; bx[a] += r[a] * Q[i][0]; by[a] += r[a] * Q[i][1]; } });
+  const sx = solve3(M, bx), sy = solve3(M, by);
+  return [sx[0], sy[0], sx[1], sy[1], sx[2], sy[2]];
+}
+async function aeDlgOpen() {
+  const piano = $('#planPiano').value, p = S.plans[piano], im = await loadImg(piano), ai = await loadAerea();
+  if (!im || !ai) { await uiAlert('Servono la planimetria di questo piano e la mappa aerea caricata.'); return; }
+  const ae = aeOf(p); ae.pts = ae.pts || [];
+  const rot = p.rot || 0, side = rot % 180 !== 0, rw = side ? im.height : im.width, rh = side ? im.width : im.height, sc = Math.min(1, 1600 / rw);
+  const W = Math.round(rw * sc), H = Math.round(rh * sc);
+  const pc = $('#aePc'), ac = $('#aeAc');
+  pc.width = W; pc.height = H; ac.width = ai.width; ac.height = ai.height;
+  Object.assign(aeDlg, { W, H, im, ai, sc, rot, ae, draft: null });
+  $('#aeMode').value = ae.mode || 'sim';
+  $('#aeDlg').hidden = false;
+  aeDlgDraw();
+}
+function aeDlgDraw() {
+  const { W, H, im, ai, sc, rot, ae } = aeDlg, pc = $('#aePc'), ac = $('#aeAc'), x = pc.getContext('2d'), y = ac.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, W, H); x.save(); x.translate(W / 2, H / 2); x.rotate(rot * Math.PI / 180); x.drawImage(im, -im.width * sc / 2, -im.height * sc / 2, im.width * sc, im.height * sc); x.restore();
+  y.drawImage(ai, 0, 0);
+  const mark = (c, px, py, n, col, r) => { c.fillStyle = col; c.strokeStyle = '#fff'; c.lineWidth = r / 4; c.beginPath(); c.arc(px, py, r, 0, 7); c.fill(); c.stroke(); c.fillStyle = '#fff'; c.font = `bold ${r * 1.5}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(n, px, py); };
+  const rp = Math.max(9, W / 110), ra = Math.max(9, ai.width / 110);
+  ae.pts.forEach((q, i) => { mark(x, q.p.x * W, q.p.y * H, i + 1, '#C62828', rp); mark(y, q.a.x * ai.width, q.a.y * ai.height, i + 1, '#C62828', ra); });
+  if (aeDlg.draft) mark(x, aeDlg.draft.x * W, aeDlg.draft.y * H, ae.pts.length + 1, '#EF6C00', rp);
+  const n = ae.pts.length, need = $('#aeMode').value === 'sim' ? 2 : 3;
+  let res = '';
+  if (n >= need) {
+    const m = lsq(ae.pts.map(q => [q.a.x * ai.width, q.a.y * ai.height]), ae.pts.map(q => [q.p.x * W, q.p.y * H]), $('#aeMode').value);
+    const errs = ae.pts.map(q => { const u = q.a.x * ai.width, v = q.a.y * ai.height; return Math.hypot(m[0] * u + m[2] * v + m[4] - q.p.x * W, m[1] * u + m[3] * v + m[5] - q.p.y * H); });
+    res = errs.map((e, i) => `${i + 1}: ${(e / W * 100).toFixed(2)}%`).join(' · ');
+    res = 'Errore per punto (% larghezza pianta): ' + res + ` — medio ${(errs.reduce((s, e) => s + e, 0) / n / W * 100).toFixed(2)}%`;
+  }
+  $('#aeSt').textContent = (aeDlg.draft ? `Punto ${n + 1}: ora clicca lo stesso punto sulla MAPPA (a destra).` : `Punti: ${n}. Clicca un punto noto sulla PLANIMETRIA (a sinistra), poi lo stesso sulla mappa.`) + (n < need ? ` Servono almeno ${need} punti (meglio 8–10, ben distribuiti).` : '') + (res ? '  ' + res : '');
+}
+function aeClick(which, e) {
+  const c = which === 'p' ? $('#aePc') : $('#aeAc'), r = c.getBoundingClientRect(), pt = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+  if (which === 'p') aeDlg.draft = pt;
+  else if (aeDlg.draft) { aeDlg.ae.pts.push({ p: aeDlg.draft, a: pt }); aeDlg.draft = null; }
+  else return;
+  aeDlgDraw();
+}
+$('#aePc').addEventListener('click', e => aeClick('p', e));
+$('#aeAc').addEventListener('click', e => aeClick('a', e));
+$('#aeAlign').addEventListener('click', aeDlgOpen);
+$('#aeMode').addEventListener('change', () => { if (aeDlg.ae) aeDlgDraw(); });
+$('#aeUndo').addEventListener('click', () => { if (aeDlg.draft) aeDlg.draft = null; else aeDlg.ae.pts.pop(); aeDlgDraw(); });
+$('#aeClr').addEventListener('click', () => { aeDlg.ae.pts = []; aeDlg.draft = null; aeDlgDraw(); });
+$('#aeCancel').addEventListener('click', () => { $('#aeDlg').hidden = true; save(); });
+[['aeZp', 'aePw', 0], ['aeZa', 'aeAw', 1]].forEach(([bid, wid, k]) => { $('#' + bid + 'In').addEventListener('click', () => { aeDlg.z[k] = Math.min(4, aeDlg.z[k] * 1.4); $('#' + wid).style.width = aeDlg.z[k] * 100 + '%'; }); $('#' + bid + 'Out').addEventListener('click', () => { aeDlg.z[k] = Math.max(1, aeDlg.z[k] / 1.4); $('#' + wid).style.width = aeDlg.z[k] * 100 + '%'; }); });
+$('#aeApply').addEventListener('click', async () => {
+  const { W, H, ai, ae } = aeDlg, mode = $('#aeMode').value, need = mode === 'sim' ? 2 : 3;
+  if (ae.pts.length < need) { await uiAlert(`Servono almeno ${need} punti.`); return; }
+  const m = lsq(ae.pts.map(q => [q.a.x * ai.width, q.a.y * ai.height]), ae.pts.map(q => [q.p.x * W, q.p.y * H]), mode);
+  ae.M = [m[0] * ai.width / W, m[1] * ai.width / H, m[2] * ai.height / W, m[3] * ai.height / H, m[4] / W, m[5] / H];   // in coordinate normalizzate: X = A·u + C·v + E, Y = B·u + D·v + F
+  ae.rotRef = aeDlg.rot; ae.mode = mode; ae.vis = true;
+  $('#aeDlg').hidden = true; save(); syncAerea(); drawPlan();
 });
 canvas.addEventListener('wheel', e => {   // con «Sposta mappa» la rotella ingrandisce/riduce la mappa
   if (!$('#aeMove').checked) return;

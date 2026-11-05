@@ -53,6 +53,17 @@
   table.grid td{min-width:120px}
   table.grid th.clo{background:#8a4b3a}
   table.grid td.clo{background:repeating-linear-gradient(45deg,#f3e6e1,#f3e6e1 6px,#ebd9d2 6px,#ebd9d2 12px)}
+  #aeDlg{position:fixed;inset:0;z-index:50;background:var(--paper);display:flex;flex-direction:column}
+  #aeDlg[hidden]{display:none}
+  .aebar{padding:8px 12px;border-bottom:1px solid var(--rule-soft);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .aebar .hint{flex-basis:100%}
+  .aecols{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px;min-height:0}
+  .aepane{display:flex;flex-direction:column;min-height:0;border:1px solid var(--rule-soft)}
+  .aeh{padding:4px 8px;font-weight:600;display:flex;gap:6px;align-items:center}
+  .aesc{flex:1;overflow:auto;background:#ddd}
+  .aesc>div{width:100%}
+  .aesc canvas{width:100%;height:auto;display:block;cursor:crosshair}
+  @media(max-width:700px){.aecols{grid-template-columns:1fr;grid-auto-rows:1fr}}
   .chi{display:flex;gap:8px;align-items:center;padding:3px 0}
   table.grid th.rn{text-align:center;width:2.5em;padding-left:4px;padding-right:4px}
   .ev{border-radius:7px;padding:4px 6px;margin-bottom:4px;font-size:12px;color:var(--ink)}
@@ -340,6 +351,7 @@
         <label><input type="checkbox" id="aeMove"> Sposta mappa</label>
         <label><input type="checkbox" id="aeLock"> Blocca</label>
         <label><input type="checkbox" id="aePrint"> Includi nelle stampe</label>
+        <button id="aeAlign" class="primary">Allinea per punti…</button>
         <button id="aeReset">Azzera allineamento</button>
         <button id="aeDel">Rimuovi mappa</button>
       </div>
@@ -464,6 +476,19 @@
   </button>
 </nav>
 
-<script src="app.js?v=20261105a"></script>
+<div id="aeDlg" hidden>
+  <div class="aebar">
+    <b>Allineamento per punti</b>
+    <label>Modello <select id="aeMode"><option value="sim">Rotazione + scala (consigliato)</option><option value="aff">Affine (anche deformazione)</option></select></label>
+    <button id="aeUndo">↶ Annulla ultimo</button><button id="aeClr">Cancella tutti</button>
+    <button id="aeApply" class="primary">✔ Applica</button><button id="aeCancel">Chiudi</button>
+    <div class="hint" id="aeSt"></div>
+  </div>
+  <div class="aecols">
+    <div class="aepane"><div class="aeh">Planimetria <button id="aeZpOut">−</button><button id="aeZpIn">+</button></div><div class="aesc"><div id="aePw"><canvas id="aePc"></canvas></div></div></div>
+    <div class="aepane"><div class="aeh">Mappa aerea <button id="aeZaOut">−</button><button id="aeZaIn">+</button></div><div class="aesc"><div id="aeAw"><canvas id="aeAc"></canvas></div></div></div>
+  </div>
+</div>
+<script src="app.js?v=20261105b"></script>
 </body>
 </html>
