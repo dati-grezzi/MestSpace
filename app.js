@@ -1304,37 +1304,27 @@ $('#rcGo').addEventListener('click', () => {
   $('#rcOut').innerHTML = riscHtml(dal, al, $('#rcVar').checked); document.body.dataset.rc = '';
 });
 
-// calendario fisso per la ditta: una tabella per settimana, come il loro «Prospetto di funzionamento»
-function calHtml(dal, al) {
-  const R = RISC(), zs = Object.keys(CIRC), mon0 = mondayOf(dal);
-  const M = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'], G = ['', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
-  const fd = d => { const t = parseISO(d); return t.getDate() + ' ' + M[t.getMonth()]; };
-  let out = '';
-  for (let m = mon0; m <= al; m = addDays(m, 7)) {
-    const days = riscData(m, addDays(m, 5));
-    const tr = [1, 2, 3, 4, 5, 6].map(k => {
-      const d = addDays(m, k - 1), r = days.find(x => x.date === d), cl = closureOf(d);
-      if (!r) return `<tr><th>${G[k]} ${fd(d)}</th><td colspan="${zs.length + 2}" style="color:#888">${cl ? 'scuola chiusa · ' + esc(cl.motivo || '') : '—'}</td></tr>`;
-      const ex = zs.flatMap(z => r.z[z].extra);
-      const on = z => r.z[z].extra.length > 0;
-      const cells = zs.map(z => on(z) ? `<td style="color:#c2410c"><b>ACCESO</b><br><small>${[...new Set(r.z[z].extra.map(i => i.dalle + '–' + i.alle))].join(', ')}</small></td>` : '<td style="color:#6b9ac4">SPENTO</td>').join('');
-      const fascia = ex.length ? hmm(Math.min(...ex.map(i => toMin(i.dalle)))) + ' – ' + hmm(Math.max(...ex.map(i => toMin(i.alle)))) : '';
-      const att = [...new Set(ex.map(i => esc(i.etichetta)))].join(', ');
-      return `<tr><th>${G[k]} ${fd(d)}</th>${cells}<td>${fascia}</td><td>${att}</td></tr>`;
+// calendario fisso (senza date): la settimana tipo, dall'orario fisso delle aule
+function calFisso() {
+  const R = RISC(), zs = Object.keys(CIRC), G = ['', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'], be = toMin(R.a), bs = toMin(R.da);
+  const tr = [1, 2, 3, 4, 5, 6].map(g => {
+    const it = S.std.filter(x => x.giorno === g), ex = [];
+    const cells = zs.map(z => {
+      const e = it.filter(i => (room(i.roomId) || {}).zona === z && (toMin(i.alle) > be || toMin(i.dalle) - R.pre < bs));
+      e.forEach(i => ex.push(i));
+      return e.length ? `<td style="color:#c2410c"><b>ACCESO</b><br><small>${[...new Set(e.map(i => i.dalle + '–' + i.alle))].join(', ')}</small></td>` : '<td style="color:#6b9ac4">SPENTO</td>';
     }).join('');
-    out += `<h4 style="margin:14px 0 4px">Settimana ${fd(m)} – ${fd(addDays(m, 5))}</h4><table class="grid"><thead><tr><th>Giorno</th>${zs.map(z => `<th>${CIRC_L[z]}</th>`).join('')}<th>Fascia oraria</th><th>Attività</th></tr></thead><tbody>${tr}</tbody></table>`;
-  }
-  return out + `<p class="hint">Mattina: accensione base ${R.da}–${R.a}. Qui sono indicate le accensioni aggiuntive (pomeriggi e attività fuori base); variazioni da comunicare almeno ${R.anticipo} giorni prima.</p>`;
+    const fascia = ex.length ? hmm(Math.min(...ex.map(i => toMin(i.dalle)))) + ' – ' + hmm(Math.max(...ex.map(i => toMin(i.alle)))) : '';
+    return `<tr><th>${G[g]}</th>${cells}<td>${fascia}</td><td>${[...new Set(ex.map(i => esc(i.etichetta)))].join(', ')}</td></tr>`;
+  }).join('');
+  return `<h4 style="margin:6px 0">Calendario fisso · settimana tipo</h4><table class="grid"><thead><tr><th>Giorno</th>${zs.map(z => `<th>${CIRC_L[z]}</th>`).join('')}<th>Fascia oraria</th><th>Attività</th></tr></thead><tbody>${tr}</tbody></table>` +
+    `<p class="hint">Ogni settimana, salvo variazioni: accensione base ${R.da}–${R.a}; qui le accensioni fisse oltre la base (da orario fisso delle aule). Le variazioni puntuali vanno comunicate almeno ${R.anticipo} giorni prima, con il prospetto per date.</p>`;
 }
-$('#rcCal').addEventListener('click', () => {
-  const dal = $('#rcDal').value, al = $('#rcAl').value;
-  if (!dal || !al || al < dal) { uiAlert('Indica un intervallo di date valido.'); return; }
-  $('#rcOut').innerHTML = calHtml(dal, al); document.body.dataset.rc = 'cal';
-});
+$('#rcCal').addEventListener('click', () => { $('#rcOut').innerHTML = calFisso(); document.body.dataset.rc = 'cal'; });
 $('#rcPrint').addEventListener('click', () => {
-  const dal = $('#rcDal').value, al = $('#rcAl').value;
-  if (!dal || !al || al < dal) { uiAlert('Indica un intervallo di date valido.'); return; }
-  $('#printArea').innerHTML = '<div class="pa"><h2>Riscaldamento · programma per la ditta</h2>' + (document.body.dataset.rc === 'cal' ? calHtml(dal, al) : riscHtml(dal, al, $('#rcVar').checked)) + '</div>';
+  const dal = $('#rcDal').value, al = $('#rcAl').value, fisso = document.body.dataset.rc === 'cal';
+  if (!fisso && (!dal || !al || al < dal)) { uiAlert('Indica un intervallo di date valido.'); return; }
+  $('#printArea').innerHTML = '<div class="pa"><h2>Riscaldamento · programma per la ditta</h2>' + (fisso ? calFisso() : riscHtml(dal, al, $('#rcVar').checked)) + '</div>';
   document.body.classList.add('print-sett'); window.print();
 });
 renderZone();
