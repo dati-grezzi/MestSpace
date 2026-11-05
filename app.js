@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-11-01 · orario docenti';
+const VERSION = '2026-11-05 · mappa aerea';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -365,6 +365,18 @@ async function loadImg(piano) {
   return img;
 }
 
+/* ---------- mappa aerea (livello sotto la planimetria) ---------- */
+let aeImg = undefined;   // undefined = da leggere; null = assente
+async function loadAerea() {
+  if (aeImg !== undefined) return aeImg;
+  const blob = await idbGet('aerea');
+  aeImg = blob ? await new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = URL.createObjectURL(blob); }) : null;
+  return aeImg;
+}
+const AE_DEF = { x: 0, y: 0, s: 1, r: 0, o: 0.5, vis: true, lock: false, print: false };
+const aeOf = p => (p.aerea = Object.assign({}, AE_DEF, p.aerea || {}));
+let aeDrag = null;
+
 // Etichetta sulla pianta: classe/attività assegnata, altrimenti nome del locale (senza numero)
 function labelFor(r, mon) {
   const its = weekItems(mon).filter(i => i.roomId === r.id)
@@ -504,7 +516,18 @@ async function drawPlan() {
   canvas.width = W; canvas.height = H;
 
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  const ae = aeOf(p), aim = (ae.vis && (!exporting || ae.print)) ? await loadAerea() : null;
+  if (aim) {   // mappa aerea sotto: la planimetria viene «moltiplicata», così il suo bianco lascia vedere la foto
+    ctx.save();
+    ctx.globalAlpha = ae.o;
+    ctx.translate(W / 2 + ae.x * W, H / 2 + ae.y * H);
+    ctx.rotate(ae.r * Math.PI / 180);
+    const aw = W * ae.s, ah = aw * aim.height / aim.width;
+    ctx.drawImage(aim, -aw / 2, -ah / 2, aw, ah);
+    ctx.restore();
+  }
   ctx.save();
+  if (aim) ctx.globalCompositeOperation = 'multiply';
   ctx.translate(W / 2, H / 2);
   ctx.rotate(rot * Math.PI / 180);
   ctx.drawImage(im, -im.width * sc / 2, -im.height * sc / 2, im.width * sc, im.height * sc);
@@ -554,6 +577,12 @@ canvas.addEventListener('pointerdown', async e => {
   if (!canvas.width || canvas.width < 700) return;
   const p = canvasXY(e);
   const piano = $('#planPiano').value;
+  if ($('#aeMove').checked && !drawingPath) {   // sposta la mappa aerea
+    const ae = aeOf(S.plans[piano]);
+    if (ae.lock) { await uiAlert('La mappa aerea è bloccata: sbloccala per spostarla.'); return; }
+    aeDrag = { id: e.pointerId, px: p.x, py: p.y, x: ae.x, y: ae.y };
+    canvas.setPointerCapture(e.pointerId); e.preventDefault(); return;
+  }
   const move = $('#moveMode').checked;
   if (drawingPath) {   // costruzione di un percorso: ogni tocco aggiunge un punto
     drawingPath.pts.push({ x: p.x / canvas.width, y: p.y / canvas.height });
@@ -593,6 +622,11 @@ canvas.addEventListener('pointerdown', async e => {
 });
 canvas.addEventListener('pointermove', e => {
   const p = canvasXY(e);
+  if (aeDrag) {
+    if (e.pointerId !== aeDrag.id) return;
+    const ae = aeOf(curPlan()); ae.x = aeDrag.x + (p.x - aeDrag.px) / canvas.width; ae.y = aeDrag.y + (p.y - aeDrag.py) / canvas.height;
+    drawPlan(); return;
+  }
   if (!drag) {
     if (e.pointerType === 'mouse') canvas.style.cursor = (labelAt(p) || vertexAt(curPlan(), p)) ? 'grab' : 'crosshair';
     return;
@@ -605,6 +639,7 @@ canvas.addEventListener('pointermove', e => {
   drawPlan();
 });
 const endDrag = e => {
+  if (aeDrag && e.pointerId === aeDrag.id) { aeDrag = null; save(); return; }
   if (!drag || e.pointerId !== drag.id) return;
   drag = null;
   canvas.style.cursor = 'crosshair';
@@ -612,10 +647,41 @@ const endDrag = e => {
 };
 canvas.addEventListener('pointerup', endDrag);
 canvas.addEventListener('pointercancel', endDrag);
-$('#moveMode').addEventListener('change', () => {
-  // con "Sposta etichette" attivo il tocco sul disegno non fa scorrere la pagina
-  canvas.style.touchAction = $('#moveMode').checked ? 'none' : 'auto';
+const syncTouch = () => { canvas.style.touchAction = ($('#moveMode').checked || $('#aeMove').checked) ? 'none' : 'auto'; };   // in modalità sposta il tocco non fa scorrere la pagina
+$('#moveMode').addEventListener('change', syncTouch);
+
+/* controlli della mappa aerea */
+function syncAerea() {
+  const ae = aeOf(curPlan());
+  $('#aeVis').checked = ae.vis; $('#aeLock').checked = ae.lock; $('#aePrint').checked = ae.print;
+  $('#aeOp').value = Math.round(ae.o * 100); $('#aeScale').value = Math.round(ae.s * 100); $('#aeRot').value = ae.r;
+  $('#aeOpV').textContent = Math.round(ae.o * 100) + '%'; $('#aeScaleV').textContent = Math.round(ae.s * 100) + '%'; $('#aeRotV').value = (+ae.r).toFixed(1);
+  loadAerea().then(i => { $('#aeInfo').textContent = i ? `Mappa caricata (${i.width}×${i.height}). «Sposta mappa» per trascinarla; rotella del mouse per ingrandire.` : 'Nessuna mappa aerea: carica un\'immagine.'; });
+}
+const aeSet = fn => { const ae = aeOf(curPlan()); if (ae.lock) { syncAerea(); return; } fn(ae); save(); syncAerea(); drawPlan(); };
+$('#aeFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  await idbPut('aerea', f); aeImg = undefined; syncAerea(); drawPlan();
 });
+$('#aeVis').addEventListener('change', () => { aeOf(curPlan()).vis = $('#aeVis').checked; save(); drawPlan(); });
+$('#aeLock').addEventListener('change', () => { aeOf(curPlan()).lock = $('#aeLock').checked; save(); });
+$('#aePrint').addEventListener('change', () => { aeOf(curPlan()).print = $('#aePrint').checked; save(); });
+$('#aeMove').addEventListener('change', syncTouch);
+$('#aeOp').addEventListener('input', () => aeSet(ae => { ae.o = $('#aeOp').value / 100; }));
+$('#aeScale').addEventListener('input', () => aeSet(ae => { ae.s = $('#aeScale').value / 100; }));
+$('#aeRot').addEventListener('input', () => aeSet(ae => { ae.r = +$('#aeRot').value; }));
+$('#aeRotV').addEventListener('change', () => aeSet(ae => { ae.r = Math.max(-180, Math.min(180, +$('#aeRotV').value || 0)); }));
+document.querySelectorAll('[data-aerot]').forEach(b => b.addEventListener('click', () => aeSet(ae => { ae.r = Math.round(((+ae.r + +b.dataset.aerot + 540) % 360 - 180) * 10) / 10; })));
+$('#aeReset').addEventListener('click', () => aeSet(ae => Object.assign(ae, { x: 0, y: 0, s: 1, r: 0 })));
+$('#aeDel').addEventListener('click', async () => {
+  if (!await uiConfirm('Rimuovere la mappa aerea (vale per entrambi i piani)?')) return;
+  await idbPut('aerea', null); aeImg = undefined; syncAerea(); drawPlan();
+});
+canvas.addEventListener('wheel', e => {   // con «Sposta mappa» la rotella ingrandisce/riduce la mappa
+  if (!$('#aeMove').checked) return;
+  const ae = aeOf(curPlan()); if (ae.lock) return;
+  e.preventDefault(); ae.s = Math.max(0.1, Math.min(4, ae.s * (e.deltaY < 0 ? 1.03 : 1 / 1.03))); save(); syncAerea(); drawPlan();
+}, { passive: false });
 const PDF_DEF = { hdr: true, ms: true, dg: true, info: true, text: 'IC VIA TACITO - PLESSO ENRICO MESTICA - {PIANO}' };
 const pdfOpt = () => (S.pdf = Object.assign({}, PDF_DEF, S.pdf || {}));
 function syncPdfOpts() {
@@ -658,7 +724,7 @@ function refreshGroups() {
   $('#grpLockBtn').textContent = g.lock ? '🔓 Sblocca gruppo' : '🔒 Blocca gruppo';
   ['grpRot', 'grpFont', 'grpAlign', 'grpTc', 'grpBg', 'grpStyleReset', 'labelSize', 'grpDel'].forEach(i => { $('#' + i).disabled = !!g.lock; });
   $('#labelSize').value = g.scale;
-  updateSel(); syncStyleControls(); refreshPaths();
+  updateSel(); syncStyleControls(); refreshPaths(); if (typeof syncAerea === 'function') syncAerea();
 }
 $('#grpSel').addEventListener('change', () => { if (drawingPath) cancelPath(); curPlan().active = $('#grpSel').value; selPath = null; save(); refreshGroups(); refreshPaths(); drawPlan(); });
 $('#grpAdd').addEventListener('click', async () => {
