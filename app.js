@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-11-06 · zone riscaldamento';
+const VERSION = '2026-11-06 · aree e poligoni';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -144,7 +144,7 @@ function load() {
       s.perm = s.perm || [];
       s.chiusure = s.chiusure || []; s.orario = s.orario || [];
       if (!s.cal2627) { CHIUSURE_2627().forEach(c => { if (!s.chiusure.some(x => x.dal <= c.al && c.dal <= (x.al || x.dal))) s.chiusure.push(c); }); s.cal2627 = true; }   // una tantum: calendario 2026/27
-      Object.values(s.plans || {}).forEach(pl => { if (pl.paths) pl.paths = pl.paths.filter(x => x.pts && x.pts.length >= 2); });   // niente percorsi fantasma
+      Object.values(s.plans || {}).forEach(pl => { if (pl.paths) pl.paths = pl.paths.filter(x => x.pts && x.pts.length >= 2); if (pl.areas) pl.areas = pl.areas.filter(x => x.pts && x.pts.length >= 3); });   // niente percorsi fantasma
       SEED.forEach(([piano, numero, nome, tipo, note]) => { const id = roomKey(piano, numero, nome); if (!s.rooms.some(r => r.id === id)) s.rooms.push({ id, piano, numero, nome, tipo, note, cap: CAP[numero]?.[0] ?? null, mq: CAP[numero]?.[1] ?? null }); });
       if (s.zoneInit && s.zoneV !== 2) { s.rooms.forEach(r => { if (['Presidenza', 'Segreteria', 'Ufficio collaboratori DS', 'Aula tecnici'].includes(r.nome)) r.zona = zonaDefault(r); }); }
       s.zoneV = 2;
@@ -443,12 +443,53 @@ function drawPaths(p, W, H) {
     strokePath(pa, W, H, !exporting && (pa.id === selPath || pa === drawingPath));
   });
 }
-const vertexAt = (p, pt) => {   // vertice del percorso selezionato sotto il punto
-  const pa = pathsOf(p).find(x => x.id === selPath); if (!pa || !groupOf(p, pa).vis) return null;
+const vertexAt = (p, pt) => {   // vertice del percorso o dell'area selezionati sotto il punto
   const r = Math.max(16, canvas.width / 90);
-  for (let i = pa.pts.length - 1; i >= 0; i--) if (Math.hypot(pa.pts[i].x * canvas.width - pt.x, pa.pts[i].y * canvas.height - pt.y) <= r) return { pa, i };
+  for (const pa of [pathsOf(p).find(x => x.id === selPath), areasOf(p).find(x => x.id === selArea)]) {
+    if (!pa || !groupOf(p, pa).vis) continue;
+    for (let i = pa.pts.length - 1; i >= 0; i--) if (Math.hypot(pa.pts[i].x * canvas.width - pt.x, pa.pts[i].y * canvas.height - pt.y) <= r) return { pa, i };
+  }
   return null;
 };
+/* ---------- aree: poligoni colorati con opacità e motivo ---------- */
+let drawingArea = null, selArea = null;
+const areasOf = p => (p.areas = p.areas || []);
+const PATS = { pieno: 'Pieno', diag: 'Righe oblique /', diag2: 'Righe oblique \\', oriz: 'Righe orizzontali', vert: 'Righe verticali', quadri: 'Quadretti', croce: 'Reticolo obliquo', punti: 'Puntini' };
+function areaFill(ar, W) {   // riempimento (colore pieno o motivo) per l'area
+  if (!ar.pat || ar.pat === 'pieno') return ar.color || '#1976D2';
+  const s = Math.max(6, Math.round(W / 140 * (ar.pw || 1))), c = document.createElement('canvas'); c.width = c.height = s;
+  const g = c.getContext('2d'); g.strokeStyle = g.fillStyle = ar.color || '#1976D2'; g.lineWidth = Math.max(1, s / 6); g.lineCap = 'square';
+  const L = (x1, y1, x2, y2) => { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); };
+  if (ar.pat === 'diag' || ar.pat === 'croce') { L(-1, s + 1, s + 1, -1); L(-1, 1, 1, -1); L(s - 1, s + 1, s + 1, s - 1); }
+  if (ar.pat === 'diag2' || ar.pat === 'croce') { L(-1, -1, s + 1, s + 1); L(s - 1, -1, s + 1, 1); L(-1, s - 1, 1, s + 1); }
+  if (ar.pat === 'oriz' || ar.pat === 'quadri') L(0, s / 2, s, s / 2);
+  if (ar.pat === 'vert' || ar.pat === 'quadri') L(s / 2, 0, s / 2, s);
+  if (ar.pat === 'punti') { g.beginPath(); g.arc(s / 2, s / 2, s / 5, 0, 7); g.fill(); }
+  return ctx.createPattern(c, 'repeat');
+}
+function drawAreas(p, W, H) {
+  if (!$('#showAreas').checked) return;
+  areasOf(p).forEach(ar => {
+    const g = groupOf(p, ar); if (!g.vis || ar.pts.length < 2) return;
+    const pts = ar.pts.map(q => [q.x * W, q.y * H]), edit = !exporting && (ar.id === selArea || ar === drawingArea);
+    ctx.save();
+    ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); if (ar !== drawingArea) ctx.closePath();
+    if (pts.length >= 3) { ctx.globalAlpha = ar.op ?? 0.35; ctx.fillStyle = areaFill(ar, W); ctx.fill(); }
+    ctx.globalAlpha = 1;
+    if (ar.line !== false || edit) {
+      ctx.strokeStyle = ar.color || '#1976D2'; ctx.lineWidth = Math.max(1.5, W / 500) * (edit ? 1.4 : 1); ctx.lineJoin = 'round';
+      if (edit) ctx.setLineDash([W / 150, W / 220]);
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+    if (ar.showName && ar.name && pts.length >= 3) {
+      const cx = pts.reduce((s, q) => s + q[0], 0) / pts.length, cy = pts.reduce((s, q) => s + q[1], 0) / pts.length, fs = Math.max(12, W / 70);
+      ctx.font = `bold ${fs}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = fs / 4; ctx.strokeStyle = '#fff'; ctx.strokeText(ar.name, cx, cy); ctx.fillStyle = '#111'; ctx.fillText(ar.name, cx, cy);
+    }
+    if (edit) pts.forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, Math.max(4, W / 300), 0, 7); ctx.fillStyle = ar.color || '#1976D2'; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke(); });
+    ctx.restore();
+  });
+}
 let labelBoxes = [];
 let exporting = false;   // rettangoli delle etichette disegnate, per trascinarle
 // gruppi (livelli) di etichette per piano: ciascuno con rotazione, dimensione e visibilità proprie
@@ -557,6 +598,7 @@ async function drawPlan() {
 
   const mon = mondayOf(weekDate);
   const showLabels = $('#showLabels').checked;
+  drawAreas(p, W, H);
   drawPaths(p, W, H);
   labelBoxes = [];
   const showNums = $('#showNums').checked;
@@ -599,7 +641,7 @@ canvas.addEventListener('pointerdown', async e => {
   if (!canvas.width || canvas.width < 700) return;
   const p = canvasXY(e);
   const piano = $('#planPiano').value;
-  if ($('#aeMove').checked && !drawingPath) {   // sposta la mappa aerea
+  if ($('#aeMove').checked && !drawingPath && !drawingArea) {   // sposta la mappa aerea
     const ae = aeOf(S.plans[piano]);
     if (ae.lock) { await uiAlert('La mappa aerea è bloccata: sbloccala per spostarla.'); return; }
     aeDrag = { id: e.pointerId, px: p.x, py: p.y, x: ae.x, y: ae.y };
@@ -611,7 +653,14 @@ canvas.addEventListener('pointerdown', async e => {
     drawPlan(); $('#pathInfo').textContent = `Punti: ${drawingPath.pts.length}. Tocca per aggiungerne, poi «Fine».`;
     e.preventDefault(); return;
   }
-  const vx = vertexAt(S.plans[piano], p);   // vertici del percorso selezionato: trascinabili (mouse sempre, touch in «Sposta»)
+  if (drawingArea) {   // costruzione di un'area: ogni tocco aggiunge un vertice; il clic sul primo la chiude
+    const f = drawingArea.pts[0];
+    if (f && drawingArea.pts.length >= 3 && Math.hypot(f.x * canvas.width - p.x, f.y * canvas.height - p.y) <= Math.max(16, canvas.width / 90)) { finishArea(); e.preventDefault(); return; }
+    drawingArea.pts.push({ x: p.x / canvas.width, y: p.y / canvas.height });
+    drawPlan(); $('#areaInfo').textContent = `Vertici: ${drawingArea.pts.length}. Tocca per aggiungerne; «Chiudi area» (o clic sul primo vertice) per terminare.`;
+    e.preventDefault(); return;
+  }
+  const vx = vertexAt(S.plans[piano], p);   // vertici del percorso/area selezionati: trascinabili (mouse sempre, touch in «Sposta»)
   if (vx && (move || e.pointerType === 'mouse')) {
     if (groupOf(S.plans[piano], vx.pa).lock) { await lockedMsg(groupOf(S.plans[piano], vx.pa)); return; }
     drag = { vtx: true, pa: vx.pa, i: vx.i, piano, id: e.pointerId };
@@ -680,7 +729,7 @@ function syncAerea() {
   $('#aeOpV').textContent = Math.round(ae.o * 100) + '%'; $('#aeScaleV').textContent = Math.round(ae.s * 100) + '%'; $('#aeRotV').value = (+ae.r).toFixed(1);
   loadAerea().then(i => { $('#aeInfo').textContent = i ? `Mappa caricata (${i.width}×${i.height}). «Sposta mappa» per trascinarla; rotella del mouse per ingrandire.` : 'Nessuna mappa aerea: carica un\'immagine.'; });
 }
-const aeSet = fn => { const ae = aeOf(curPlan()); if (ae.lock) { syncAerea(); return; } if (ae.M) delete ae.M; fn(ae); save(); syncAerea(); drawPlan(); };
+const aeSet = (fn, keepM) => { const ae = aeOf(curPlan()); if (ae.lock) { syncAerea(); return; } if (ae.M && !keepM) delete ae.M; fn(ae); save(); syncAerea(); drawPlan(); };
 $('#aeFile').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
   await idbPut('aerea', f); aeImg = undefined; syncAerea(); drawPlan();
@@ -689,7 +738,7 @@ $('#aeVis').addEventListener('change', () => { aeOf(curPlan()).vis = $('#aeVis')
 $('#aeLock').addEventListener('change', () => { aeOf(curPlan()).lock = $('#aeLock').checked; save(); });
 $('#aePrint').addEventListener('change', () => { aeOf(curPlan()).print = $('#aePrint').checked; save(); });
 $('#aeMove').addEventListener('change', syncTouch);
-$('#aeOp').addEventListener('input', () => aeSet(ae => { ae.o = $('#aeOp').value / 100; }));
+$('#aeOp').addEventListener('input', () => aeSet(ae => { ae.o = $('#aeOp').value / 100; }, true));   // l'opacità non tocca l'allineamento
 $('#aeScale').addEventListener('input', () => aeSet(ae => { ae.s = $('#aeScale').value / 100; }));
 $('#aeRot').addEventListener('input', () => aeSet(ae => { ae.r = +$('#aeRot').value; }));
 $('#aeRotV').addEventListener('change', () => aeSet(ae => { ae.r = Math.max(-180, Math.min(180, +$('#aeRotV').value || 0)); }));
@@ -821,7 +870,7 @@ function refreshGroups() {
   $('#labelSize').value = g.scale;
   updateSel(); syncStyleControls(); refreshPaths(); if (typeof syncAerea === 'function') syncAerea();
 }
-$('#grpSel').addEventListener('change', () => { if (drawingPath) cancelPath(); curPlan().active = $('#grpSel').value; selPath = null; save(); refreshGroups(); refreshPaths(); drawPlan(); });
+$('#grpSel').addEventListener('change', () => { if (drawingPath) cancelPath(); if (drawingArea) cancelArea(); selArea = null; curPlan().active = $('#grpSel').value; selPath = null; save(); refreshGroups(); refreshPaths(); drawPlan(); });
 $('#grpAdd').addEventListener('click', async () => {
   const p = curPlan(); grpsOf($('#planPiano').value);
   const name = await uiPrompt('Nome del nuovo gruppo di etichette:', 'Gruppo ' + (p.groups.length + 1)); if (!name) return;
@@ -841,6 +890,7 @@ $('#grpCopy').addEventListener('click', async () => {
     p.points[nk] = { ...pt, g: ng.id }; nPt++;
   });
   pathsOf(p).filter(x => groupOf(p, x).id === g.id).forEach(x => { p.paths.push({ ...x, id: uid(), pts: x.pts.map(q => ({ ...q })), g: ng.id }); nPa++; });
+  areasOf(p).filter(x => groupOf(p, x).id === g.id).forEach(x => { p.areas.push({ ...x, id: uid(), pts: x.pts.map(q => ({ ...q })), g: ng.id }); });
   p.groups.push(ng); p.active = ng.id; selKey = null; save(); refreshGroups(); drawPlan();
   await uiAlert(`Creato «${ng.name}» con ${nPt} etichette e ${nPa} percorsi, nella stessa posizione degli originali. Trascinale, ruotale o cambia stile solo per questo gruppo; nascondi l'altro per confrontare.`);
 });
@@ -855,6 +905,7 @@ $('#grpDel').addEventListener('click', async () => {
   if (!await uiConfirm(`Eliminare il gruppo «${g.name}» e le sue ${ids.length} etichette?`)) return;
   ids.forEach(k => delete p.points[k]);
   p.paths = pathsOf(p).filter(x => groupOf(p, x).id !== g.id);
+  p.areas = areasOf(p).filter(x => groupOf(p, x).id !== g.id);
   if (p.groups.length > 1) p.groups = p.groups.filter(x => x.id !== g.id);
   p.active = p.groups[0].id; selKey = null; save(); refreshGroups(); drawPlan();
 });
@@ -916,7 +967,7 @@ $('#clearPts').addEventListener('click', async () => {
   save(); refreshGroups(); drawPlan();
 });
 $('#planPiano').addEventListener('change', () => {
-  if (drawingPath) Object.values(S.plans).forEach(q => { if (q.paths) q.paths = q.paths.filter(x => x !== drawingPath); }); img = null; fillMapRooms(); selKey = null; selPath = null; drawingPath = null; refreshGroups(); refreshPaths();
+  if (drawingPath) Object.values(S.plans).forEach(q => { if (q.paths) q.paths = q.paths.filter(x => x !== drawingPath); }); img = null; fillMapRooms(); selKey = null; selPath = null; drawingPath = null; if (drawingArea) Object.values(S.plans).forEach(q => { if (q.areas) q.areas = q.areas.filter(x => x !== drawingArea); }); drawingArea = null; selArea = null; refreshGroups(); refreshPaths();
   $('#pdfPage').value = $('#planPiano').value === 'primo' ? 2 : 1;
   drawPlan();
 });
@@ -1004,6 +1055,7 @@ function refreshPaths() {
   const dr = !!drawingPath;
   ['pathEnd', 'pathUndo', 'pathCancel'].forEach(i => { $('#' + i).hidden = !dr; });
   ['pathNew', 'pathRen', 'pathDel', 'pathSel'].forEach(i => { $('#' + i).disabled = dr; });
+  if (typeof refreshAreas === 'function') refreshAreas();
   if (!dr) $('#pathInfo').textContent = pa ? `${pa.pts.length} punti · ${groupOf(p, pa).name}${groupOf(p, pa).lock ? ' 🔒' : ''}. Trascina i vertici per correggere.` : '';
 }
 async function pathEdit(fn) {   // modifica del percorso selezionato (rispetta il blocco del gruppo)
@@ -1054,6 +1106,68 @@ $('#pathDel').addEventListener('click', async () => {
   p.paths = p.paths.filter(x => x !== pa); selPath = null; save(); drawPlan(); refreshPaths();
 });
 $('#showPaths').addEventListener('change', drawPlan);
+
+function refreshAreas() {
+  const p = curPlan(), L = areasOf(p).filter(x => groupOf(p, x).id === p.active || x === drawingArea);
+  $('#areaSel').innerHTML = L.length ? L.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('') : '<option value="">(nessuna area)</option>';
+  if (!L.some(x => x.id === selArea)) selArea = L.length ? L[L.length - 1].id : null;
+  $('#areaSel').value = selArea || '';
+  const ar = L.find(x => x.id === selArea);
+  if (ar) { $('#areaColor').value = ar.color || '#1976D2'; $('#areaOp').value = Math.round((ar.op ?? 0.35) * 100); $('#areaPat').value = ar.pat || 'pieno'; $('#areaPw').value = ar.pw || 1; $('#areaLine').checked = ar.line !== false; $('#areaName').checked = !!ar.showName; $('#areaOpV').textContent = Math.round((ar.op ?? 0.35) * 100) + '%'; }
+  const dr = !!drawingArea;
+  ['areaEnd', 'areaUndo', 'areaCancel'].forEach(i => { $('#' + i).hidden = !dr; });
+  ['areaNew', 'areaRen', 'areaDel', 'areaSel'].forEach(i => { $('#' + i).disabled = dr; });
+  if (!dr) $('#areaInfo').textContent = ar ? `${ar.pts.length} vertici · ${groupOf(p, ar).name}${groupOf(p, ar).lock ? ' 🔒' : ''}. Trascina i vertici per correggere.` : '';
+}
+async function areaEdit(fn) {
+  const p = curPlan(), ar = areasOf(p).find(x => x.id === selArea);
+  if (!ar) { await uiAlert('Seleziona o crea prima un\'area.'); return; }
+  if (groupOf(p, ar).lock) { await lockedMsg(groupOf(p, ar)); refreshAreas(); return; }
+  fn(ar); save(); drawPlan(); refreshAreas();
+}
+$('#areaNew').addEventListener('click', async () => {
+  const p = curPlan(); grpsOf($('#planPiano').value);
+  if (curGroup().lock) { await lockedMsg(curGroup()); return; }
+  const name = await uiPrompt('Nome dell\'area (es. Zona A, Aree riscaldate, Cortile):', 'Area ' + (areasOf(p).length + 1));
+  if (!name || !name.trim()) return;
+  const last = areasOf(p)[areasOf(p).length - 1];
+  const ar = { id: uid(), name: name.trim(), pts: [], color: last?.color || '#1976D2', op: last?.op ?? 0.35, pat: last?.pat || 'pieno', pw: 1, line: true, showName: false, g: p.active };
+  p.areas.push(ar); drawingArea = ar; selArea = ar.id; $('#showAreas').checked = true;
+  refreshAreas(); $('#areaInfo').textContent = 'Tocca la pianta per segnare i vertici, poi «Chiudi area».';
+});
+const finishArea = async () => {
+  const ar = drawingArea; if (!ar) return;
+  if (ar.pts.length < 3) { await uiAlert('Servono almeno tre vertici: area scartata.'); cancelArea(); return; }
+  drawingArea = null; save(); drawPlan(); refreshAreas();
+};
+const cancelArea = () => {
+  if (!drawingArea) return;
+  const p = curPlan(); p.areas = p.areas.filter(x => x !== drawingArea); drawingArea = null; selArea = null;
+  save(); drawPlan(); refreshAreas();
+};
+$('#areaEnd').addEventListener('click', finishArea);
+$('#areaCancel').addEventListener('click', cancelArea);
+$('#areaUndo').addEventListener('click', () => { if (drawingArea) { drawingArea.pts.pop(); drawPlan(); $('#areaInfo').textContent = `Vertici: ${drawingArea.pts.length}.`; } });
+canvas.addEventListener('dblclick', () => { if (drawingArea) { drawingArea.pts.pop(); finishArea(); } });
+$('#areaSel').addEventListener('change', () => { selArea = $('#areaSel').value || null; refreshAreas(); drawPlan(); });
+$('#areaColor').addEventListener('input', () => areaEdit(a => { a.color = $('#areaColor').value; }));
+$('#areaOp').addEventListener('input', () => areaEdit(a => { a.op = $('#areaOp').value / 100; }));
+$('#areaPat').addEventListener('change', () => areaEdit(a => { a.pat = $('#areaPat').value; }));
+$('#areaPw').addEventListener('input', () => areaEdit(a => { a.pw = parseFloat($('#areaPw').value); }));
+$('#areaLine').addEventListener('change', () => areaEdit(a => { a.line = $('#areaLine').checked; }));
+$('#areaName').addEventListener('change', () => areaEdit(a => { a.showName = $('#areaName').checked; }));
+$('#areaRen').addEventListener('click', async () => {
+  const ar = areasOf(curPlan()).find(x => x.id === selArea); if (!ar) return;
+  const n = await uiPrompt('Nuovo nome dell\'area:', ar.name); if (!n || !n.trim()) return;
+  areaEdit(x => { x.name = n.trim(); });
+});
+$('#areaDel').addEventListener('click', async () => {
+  const p = curPlan(), ar = areasOf(p).find(x => x.id === selArea); if (!ar) return;
+  if (groupOf(p, ar).lock) { await lockedMsg(groupOf(p, ar)); return; }
+  if (!await uiConfirm(`Eliminare l'area «${ar.name}»?`)) return;
+  p.areas = p.areas.filter(x => x !== ar); selArea = null; save(); drawPlan(); refreshAreas();
+});
+$('#showAreas').addEventListener('change', drawPlan);
 $('#freeAdd').addEventListener('click', async () => {
   const piano = $('#planPiano').value, p = S.plans[piano];
   const t = await uiPromptMulti('Testo della nuova etichetta. Premi Invio per andare a capo su più righe (Ctrl+Invio per confermare):', '');
