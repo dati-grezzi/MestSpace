@@ -1258,7 +1258,8 @@ renderChiusure();
 
 /* ---------- riscaldamento: zone e prospetto per la ditta ---------- */
 const RISC = () => {
-  S.risc = Object.assign({ da: '06:00', a: '12:00', max: 10, pre: 0, anticipo: 2 }, S.risc || {});
+  S.risc = S.risc || {};
+  Object.entries({ da: '06:00', a: '12:00', max: 10, pre: 0, anticipo: 2 }).forEach(([k, v]) => { if (S.risc[k] === undefined) S.risc[k] = v; });   // in place: lo stesso oggetto a ogni chiamata
   if (!S.risc.fissi) S.risc.fissi = [   // accensioni pomeridiane fisse (da confermare gli orari)
     { id: 'f1', zona: 'A', giorni: [1, 2, 3, 4, 5], dal: '13:30', al: '18:30', att: 'Musicale' },
     { id: 'f2', zona: 'A', giorni: [1, 2, 3, 4, 5], dal: '13:30', al: '18:30', att: 'Atrio e segreteria' }];
