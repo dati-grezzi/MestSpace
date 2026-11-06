@@ -1322,7 +1322,7 @@ function calFisso() {
   const tr = [1, 2, 3, 4, 5, 6].map(g => {
     const it = S.std.filter(x => x.giorno === g); let fine = 0;
     const cells = zs.map(z => {
-      const c = zoneDay(CIRC[z], g, it), pm = c.iv.filter(x => x[1] > be || x[0] < bs);
+      const c = zoneDay(CIRC[z], g, it), pm = g === 6 ? [] : c.iv.filter(x => x[1] > be || x[0] < bs);   // sabato pomeriggio sempre spento
       if (pm.length) fine = Math.max(fine, ...pm.map(x => x[1]));
       return pm.length ? '<td style="color:#c2410c"><b>ACCESO</b></td>' : '<td style="color:#6b9ac4">SPENTO</td>';
     }).join('');
