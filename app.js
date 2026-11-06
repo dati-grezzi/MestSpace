@@ -1318,19 +1318,18 @@ function riscHtml(dal, al, soloVar) {
 }
 // calendario fisso (senza date): la settimana tipo = base + accensioni fisse + orario fisso delle aule
 function calFisso() {
-  const R = RISC(), zs = Object.keys(CIRC), G = ['', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'], bs = toMin(R.da), be = toMin(R.a);
+  const R = RISC(), zs = Object.keys(CIRC), G = ['', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'], bs = toMin(R.da), be = toMin(R.a), ini = SCAN[0][1];
   const tr = [1, 2, 3, 4, 5, 6].map(g => {
-    const it = S.std.filter(x => x.giorno === g), info = [];
+    const it = S.std.filter(x => x.giorno === g); let fine = 0;
     const cells = zs.map(z => {
       const c = zoneDay(CIRC[z], g, it), pm = c.iv.filter(x => x[1] > be || x[0] < bs);
-      c.fissi.forEach(f => info.push([f.dal, f.al, f.att])); c.extra.forEach(i => info.push([i.dalle, i.alle, i.etichetta]));
-      return pm.length ? `<td style="color:#c2410c"><b>ACCESO</b><br><small>${ivTxt(pm)}</small>${c.rid != null ? '<br><small>mattina dalle ' + hmm(c.rid) + '</small>' : ''}${c.over ? '<br><small>oltre ' + R.max + ' h</small>' : ''}</td>` : '<td style="color:#6b9ac4">SPENTO</td>';
+      if (pm.length) fine = Math.max(fine, ...pm.map(x => x[1]));
+      return pm.length ? '<td style="color:#c2410c"><b>ACCESO</b></td>' : '<td style="color:#6b9ac4">SPENTO</td>';
     }).join('');
-    const fascia = info.length ? info.map(x => x[0]).sort()[0] + ' – ' + info.map(x => x[1]).sort().slice(-1)[0] : '';
-    return `<tr><th>${G[g]}</th>${cells}<td>${fascia}</td><td>${[...new Set(info.map(x => esc(x[2])))].join(', ')}</td></tr>`;
+    return `<tr><th>${G[g]}</th>${cells}<td>${fine ? ini + ' – ' + hmm(fine) : ''}</td></tr>`;
   }).join('');
-  return `<h4 style="margin:6px 0">Calendario fisso · settimana tipo</h4><table class="grid"><thead><tr><th>Giorno</th>${zs.map(z => `<th>${CIRC_L[z]}</th>`).join('')}<th>Fascia oraria</th><th>Attività</th></tr></thead><tbody>${tr}</tbody></table>` +
-    `<p class="hint">Ogni settimana, salvo variazioni: mattina ${R.da}–${R.a}; qui le accensioni oltre la base. Le variazioni puntuali vanno comunicate almeno ${R.anticipo} giorni prima, con il prospetto per date.</p>`;
+  return `<h4 style="margin:6px 0">Calendario fisso · settimana tipo</h4><table class="grid"><thead><tr><th>Giorno</th>${zs.map(z => `<th>${CIRC_L[z]}</th>`).join('')}<th>Fascia oraria</th></tr></thead><tbody>${tr}</tbody></table>` +
+    `<p class="hint">Ogni settimana, salvo variazioni. ACCESO = accensione anche nel pomeriggio, oltre la base del mattino. Fascia oraria: dall'inizio delle lezioni (${ini}) alla fine dell'accensione più tarda.</p>`;
 }
 $('#rcCal').addEventListener('click', () => { $('#rcOut').innerHTML = calFisso(); document.body.dataset.rc = 'cal'; });
 $('#rcGo').addEventListener('click', () => {
