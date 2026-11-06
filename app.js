@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-11-06 · aree e poligoni';
+const VERSION = '2026-11-06 · chiusura aree, etichette protette';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -452,7 +452,7 @@ const vertexAt = (p, pt) => {   // vertice del percorso o dell'area selezionati 
   return null;
 };
 /* ---------- aree: poligoni colorati con opacità e motivo ---------- */
-let drawingArea = null, selArea = null;
+let drawingArea = null, selArea = null, areaCursor = null, areaRaf = 0;
 const areasOf = p => (p.areas = p.areas || []);
 const PATS = { pieno: 'Pieno', diag: 'Righe oblique /', diag2: 'Righe oblique \\', oriz: 'Righe orizzontali', vert: 'Righe verticali', quadri: 'Quadretti', croce: 'Reticolo obliquo', punti: 'Puntini' };
 function areaFill(ar, W) {   // riempimento (colore pieno o motivo) per l'area
@@ -487,6 +487,20 @@ function drawAreas(p, W, H) {
       ctx.lineWidth = fs / 4; ctx.strokeStyle = '#fff'; ctx.strokeText(ar.name, cx, cy); ctx.fillStyle = '#111'; ctx.fillText(ar.name, cx, cy);
     }
     if (edit) pts.forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, Math.max(4, W / 300), 0, 7); ctx.fillStyle = ar.color || '#1976D2'; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke(); });
+    if (ar === drawingArea && !exporting) {   // guida alla chiusura: segmento verso il cursore, lato di chiusura e primo vertice evidenziato
+      const last = pts[pts.length - 1], first = pts[0], r = Math.max(16, W / 90), cur = areaCursor, near = cur && pts.length >= 3 && Math.hypot(cur.x - first[0], cur.y - first[1]) <= r;
+      ctx.setLineDash([W / 200, W / 200]); ctx.lineWidth = Math.max(1.5, W / 600); ctx.strokeStyle = ar.color || '#1976D2';
+      if (cur && last) { ctx.beginPath(); ctx.moveTo(last[0], last[1]); ctx.lineTo(near ? first[0] : cur.x, near ? first[1] : cur.y); ctx.stroke(); }
+      if (pts.length >= 3) { ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.moveTo(last[0], last[1]); ctx.lineTo(first[0], first[1]); ctx.stroke(); ctx.globalAlpha = 1; }
+      ctx.setLineDash([]);
+      if (pts.length >= 3) {
+        ctx.beginPath(); ctx.arc(first[0], first[1], near ? r : r * 0.75, 0, 7); ctx.fillStyle = near ? 'rgba(46,125,50,.35)' : 'rgba(46,125,50,.15)'; ctx.fill();
+        ctx.strokeStyle = '#2E7D32'; ctx.lineWidth = near ? 4 : 2.5; ctx.stroke();
+        const fs = Math.max(12, W / 90); ctx.font = `bold ${fs}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.lineWidth = fs / 4; ctx.strokeStyle = '#fff'; ctx.strokeText('chiudi qui', first[0], first[1] - r - 3); ctx.fillStyle = '#2E7D32'; ctx.fillText('chiudi qui', first[0], first[1] - r - 3);
+      }
+      ctx.beginPath(); ctx.arc(last[0], last[1], Math.max(6, W / 220), 0, 7); ctx.strokeStyle = '#EF6C00'; ctx.lineWidth = 2.5; ctx.stroke();   // ultimo vertice inserito
+    }
     ctx.restore();
   });
 }
@@ -630,6 +644,7 @@ function fillMapRooms() {
     '<optgroup label="Attività assegnate">' + rs.map(r => `<option value="${r.id}">${r.numero != null ? 'Aula ' + r.numero : esc(r.nome)}</option>`).join('') + '</optgroup>';
 }
 /* posizionare e trascinare le etichette */
+const lblEditOn = () => $('#lblEdit').checked;   // posizionare/spostare etichette solo se attivato esplicitamente (sempre spento all'avvio)
 let drag = null;
 let pendingFree = null;   // etichetta libera creata e in attesa di essere posizionata
 const canvasXY = e => {
@@ -666,6 +681,10 @@ canvas.addEventListener('pointerdown', async e => {
     drag = { vtx: true, pa: vx.pa, i: vx.i, piano, id: e.pointerId };
     canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing'; e.preventDefault(); return;
   }
+  if (!lblEditOn() && !pendingFree) {   // etichette non modificabili: un clic può solo selezionarle (per lo stile), mai posizionarle o spostarle
+    const sb = labelAt(p); if (sb) { selKey = sb.rid; updateSel(); }
+    return;
+  }
   if (!Object.keys(S.plans[piano].points).length && move && !pendingFree) return;
   // col mouse si trascina sempre; sul touch serve la modalità "Sposta etichette"
   const b = (move || e.pointerType === 'mouse') ? labelAt(p) : null;
@@ -693,13 +712,14 @@ canvas.addEventListener('pointerdown', async e => {
 });
 canvas.addEventListener('pointermove', e => {
   const p = canvasXY(e);
+  if (drawingArea) { areaCursor = p; if (!areaRaf) areaRaf = requestAnimationFrame(() => { areaRaf = 0; drawPlan(); }); return; }
   if (aeDrag) {
     if (e.pointerId !== aeDrag.id) return;
     const ae = aeOf(curPlan()); ae.x = aeDrag.x + (p.x - aeDrag.px) / canvas.width; ae.y = aeDrag.y + (p.y - aeDrag.py) / canvas.height;
     drawPlan(); return;
   }
   if (!drag) {
-    if (e.pointerType === 'mouse') canvas.style.cursor = (labelAt(p) || vertexAt(curPlan(), p)) ? 'grab' : 'crosshair';
+    if (e.pointerType === 'mouse') canvas.style.cursor = ((lblEditOn() && labelAt(p)) || vertexAt(curPlan(), p)) ? 'grab' : (lblEditOn() || pendingFree ? 'crosshair' : 'default');
     return;
   }
   if (e.pointerId !== drag.id) return;
