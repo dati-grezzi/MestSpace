@@ -1536,10 +1536,33 @@ $('#rcGo').addEventListener('click', () => {
   $('#rcOut').innerHTML = riscHtml(dal, al, $('#rcVar').checked); document.body.dataset.rc = '';
 });
 
-$('#rcPrint').addEventListener('click', () => {
-  const dal = $('#rcDal').value, al = $('#rcAl').value, fisso = document.body.dataset.rc === 'cal';
-  if (!fisso && (!dal || !al || al < dal)) { uiAlert('Indica un intervallo di date valido.'); return; }
-  $('#printArea').innerHTML = '<div class="pa"><h2>Riscaldamento · programma per la ditta</h2>' + (fisso ? calFisso() : riscHtml(dal, al, $('#rcVar').checked)) + '</div>';
+// «Stampa schermata»: pagina A3 con le due piante zonate, le accensioni e i calendari
+const dayList = gs => { const s = [...gs].sort(), N = ['', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab']; if (!s.length) return '—'; const out = []; let a = s[0], b = a; for (const g of s.slice(1)) { if (g === b + 1) b = g; else { out.push([a, b]); a = b = g; } } out.push([a, b]); return out.map(([x, y]) => x === y ? N[x] : y === x + 1 ? N[x] + ', ' + N[y] : N[x] + '–' + N[y]).join(', '); };
+const dShort = d => { const t = parseISO(d); return DAYS[t.getDay()] + ' ' + t.getDate() + '/' + (t.getMonth() + 1); };
+async function heatPrintHtml() {
+  const R = RISC(), o = pdfOpt(), today = iso(new Date()), cap = c => { try { return c.toDataURL('image/jpeg', 0.92); } catch (e) { return ''; } };
+  await renderHeatMaps();
+  const zt = z => `<span class="zsw" style="background:${ZCOL[z]}"></span>${ZONE[z]}`;
+  const fissi = '<table class="grid pr"><thead><tr><th>Zona</th><th>Giorni</th><th>Orario</th><th>Attività</th></tr></thead><tbody>' +
+    (R.fissi.map(f => `<tr><td>${zt(f.zona)}</td><td>${dayList(f.giorni)}</td><td>${f.dal}–${f.al}</td><td>${esc(f.att)}</td></tr>`).join('') || '<tr><td colspan="4">—</td></tr>') + '</tbody></table>';
+  const occ = (R.occ || []).filter(x => (x.al || x.dal) >= today).sort((p, q) => (p.dal + p.dalle).localeCompare(q.dal + q.dalle));
+  const zl = z => z.split('').map(k => `<b style="color:${ZCOL[k]}">${k}</b>`).join('+');
+  const occT = '<table class="grid pr"><thead><tr><th>Quando</th><th>Zone</th><th>Orario</th><th>Motivo</th></tr></thead><tbody>' +
+    (occ.map(x => `<tr><td>${dShort(x.dal)}${x.al && x.al !== x.dal ? ' → ' + dShort(x.al) : ''}</td><td>${zl(x.zone)}</td><td>${x.dalle}–${x.alle}</td><td>${esc(x.att || '')}</td></tr>`).join('') || '<tr><td colspan="4">Nessuna accensione occasionale in programma.</td></tr>') + '</tbody></table>';
+  const dal = $('#rcDal').value, al = $('#rcAl').value, haveRange = dal && al && al >= dal;
+  const hdr = o.hdr ? `<img class="phdr" src="${await headerImage('IC VIA TACITO - PLESSO ENRICO MESTICA - RISCALDAMENTO', 400, 18)}">` : '';
+  const foot = pn => (o.ms || o.dg || o.info) ? '<div class="pfoot"><div class="l">' + (o.ms ? `<img src="${LOGO_MS.src}"><span>Gestione locali Mestica</span>` : '') + '</div>' +
+    `<div>${o.info ? `Scuola secondaria Mestica · Riscaldamento · stampa del ${fmt(today)} · pag. ${pn}` : ''}</div><div class="r">` + (o.dg ? `<span>powered by</span><img src="${LOGO_DG.src}">` : '') + '</div></div>' : '';
+  const leg = '<div class="heatleg">' + ['A', 'B', 'C'].map(z => `<span>${zt(z)}</span>`).join('') + '<span><span class="zsw" style="background:#8a8a8a"></span>senza zona</span></div>';
+  const warn = $('#heatWarn').innerText.trim();
+  const p1 = `<div class="pa pa-risc">${hdr}<div class="maps"><figure><figcaption>Piano terra</figcaption><img src="${cap($('#heatT'))}"></figure><figure><figcaption>Primo piano</figcaption><img src="${cap($('#heatP'))}"></figure></div>${leg}${warn ? `<p class="hint">${esc(warn)}</p>` : ''}` +
+    `<div class="cols"><div><h3>Regole di accensione</h3><p class="psub">Base ${R.da}–${R.a} · massimo ${R.max} ore al giorno per zona · variazioni da comunicare almeno ${R.anticipo} giorni prima. Sabato pomeriggio sempre spento.</p><h3>Accensioni fisse oltre la base</h3>${fissi}</div><div>${calFisso()}</div></div>${foot(1)}</div>`;
+  const p2 = `<div class="pa pa-risc">${hdr}<div class="cols2"><div><h3>Accensioni occasionali in programma</h3>${occT}</div>` +
+    `<div><h3>Programma per date${haveRange ? ` · ${fmt(dal)} – ${fmt(al)}` : ''}</h3>${haveRange ? riscHtml(dal, al, $('#rcVar').checked) : '<p class="hint">Imposta «dal» e «al» nella scheda per includere il programma giorno per giorno.</p>'}</div></div>${foot(2)}</div>`;
+  return p1 + (occ.length || haveRange ? p2 : '');
+}
+$('#rcPrint').addEventListener('click', async () => {
+  $('#printArea').innerHTML = await heatPrintHtml();
   document.body.classList.add('print-sett'); window.print();
 });
 function renderFissi() {

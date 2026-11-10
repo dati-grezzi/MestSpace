@@ -133,6 +133,20 @@
   .pa .pfoot img{height:8mm;display:block}
   .pa .pfoot .l,.pa .pfoot .r{display:flex;align-items:center;gap:3mm;flex:0 0 auto}
   .pa .pfix{margin:6px 0}
+  .pa-risc{font-size:15px}
+  .pa-risc h3{font-family:'Zilla Slab',Georgia,serif;margin:6px 0 4px;font-size:18px}
+  .pa-risc .maps{display:grid;grid-template-columns:1fr 1fr;gap:6mm;margin-bottom:3mm}
+  .pa-risc .maps figure{margin:0;border:1px solid #999}
+  .pa-risc .maps figcaption{font-weight:700;font-size:15px;padding:2px 6px;background:#eef2ea}
+  .pa-risc .maps img{width:100%;max-height:150mm;object-fit:contain;display:block}
+  .pa-risc .heatleg{display:flex;gap:14mm;margin:2mm 0;font-size:14px}
+  .pa-risc .zsw{display:inline-block;width:3.2mm;height:3.2mm;border-radius:50%;margin-right:2mm;vertical-align:-0.5mm}
+  .pa-risc .cols{display:grid;grid-template-columns:5fr 7fr;gap:8mm;align-items:start}
+  .pa-risc .cols2{display:grid;grid-template-columns:5fr 7fr;gap:8mm;align-items:start;margin-top:2mm}
+  .pa-risc table.grid th,.pa-risc table.grid td{font-size:14.5px;padding:4px 7px}
+  .pa-risc table.grid tr{break-inside:avoid}
+  .pa-risc h4{margin:0 0 3px;font-size:16px}
+  .pa-risc .hint{font-size:13px;margin:4px 0}
   body.big{font-size:17px}
   body.big .ev{font-size:15px}
   body.big table.grid th{font-size:15px}
@@ -447,7 +461,7 @@
     <div class="bar">
       <label>dal <input type="date" id="rcDal"></label><label>al <input type="date" id="rcAl"></label>
       <label><input type="checkbox" id="rcVar" checked> solo giorni con variazioni</label>
-      <button id="rcGo">Mostra prospetto</button><button id="rcCal">Calendario fisso</button><button id="rcPrint">Stampa</button>
+      <button id="rcGo">Mostra prospetto</button><button id="rcCal">Calendario fisso</button><button id="rcPrint" class="primary">🖨 Stampa schermata (A3)</button>
     </div>
     <div id="rcOut"></div>
   </section>
@@ -565,6 +579,6 @@
     <div class="aepane"><div class="aeh">Mappa aerea <button id="aeZaOut">−</button><button id="aeZaIn">+</button></div><div class="aesc"><div id="aeAw"><canvas id="aeAc"></canvas></div></div></div>
   </div>
 </div>
-<script src="app.js?v=20261110f"></script>
+<script src="app.js?v=20261110g"></script>
 </body>
 </html>
