@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-11-10 · occasionali da piano attività';
+const VERSION = '2026-11-10 · stampa riscaldamento in PDF diretto';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -1515,19 +1515,23 @@ function riscHtml(dal, al, soloVar) {
     `</tbody></table><p class="hint">Base ${R.da}–${R.a} + accensioni fisse (scheda Riscaldamento); giallo = attività fuori dalle fasce già accese; rosso = oltre ${R.max} h di accensione al giorno (somma delle fasce).</p>`;
 }
 // calendario fisso (senza date): la settimana tipo = base + accensioni fisse + orario fisso delle aule
-function calFisso() {
+function calFissoData() {
   const R = RISC(), zs = Object.keys(CIRC), G = ['', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'], bs = toMin(R.da), be = toMin(R.a), ini = SCAN[0][1];
-  const tr = [1, 2, 3, 4, 5, 6].map(g => {
+  const rows = [1, 2, 3, 4, 5, 6].map(g => {
     const it = S.std.filter(x => x.giorno === g); let fine = 0;
-    const cells = zs.map(z => {
+    const on = zs.map(z => {
       const c = zoneDay(CIRC[z], g, it), pm = g === 6 ? [] : c.iv.filter(x => x[1] > be || x[0] < bs);   // sabato pomeriggio sempre spento
       if (pm.length) fine = Math.max(fine, ...pm.map(x => x[1]));
-      return pm.length ? '<td style="color:#c2410c"><b>ACCESO</b></td>' : '<td style="color:#6b9ac4">SPENTO</td>';
-    }).join('');
-    return `<tr><th>${G[g]}</th>${cells}<td>${fine ? ini + ' – ' + hmm(fine) : ''}</td></tr>`;
-  }).join('');
-  return `<h4 style="margin:6px 0">Calendario fisso · settimana tipo</h4><table class="grid"><thead><tr><th>Giorno</th>${zs.map(z => `<th>${CIRC_L[z]}</th>`).join('')}<th>Fascia oraria</th></tr></thead><tbody>${tr}</tbody></table>` +
-    `<p class="hint">Ogni settimana, salvo variazioni. ACCESO = accensione anche nel pomeriggio, oltre la base del mattino. Fascia oraria: dall'inizio delle lezioni (${ini}) alla fine dell'accensione più tarda.</p>`;
+      return !!pm.length;
+    });
+    return { g: G[g], on, fascia: fine ? ini + ' – ' + hmm(fine) : '' };
+  });
+  return { zs, rows, ini, nota: `Ogni settimana, salvo variazioni. ACCESO = accensione anche nel pomeriggio, oltre la base del mattino. Fascia oraria: dall'inizio delle lezioni (${ini}) alla fine dell'accensione più tarda.` };
+}
+function calFisso() {
+  const c = calFissoData();
+  const tr = c.rows.map(r => `<tr><th>${r.g}</th>${r.on.map(o => o ? '<td style="color:#c2410c"><b>ACCESO</b></td>' : '<td style="color:#6b9ac4">SPENTO</td>').join('')}<td>${r.fascia}</td></tr>`).join('');
+  return `<h4 style="margin:6px 0">Calendario fisso · settimana tipo</h4><table class="grid"><thead><tr><th>Giorno</th>${c.zs.map(z => `<th>${CIRC_L[z]}</th>`).join('')}<th>Fascia oraria</th></tr></thead><tbody>${tr}</tbody></table><p class="hint">${c.nota}</p>`;
 }
 $('#rcCal').addEventListener('click', () => { $('#rcOut').innerHTML = calFisso(); document.body.dataset.rc = 'cal'; });
 $('#rcGo').addEventListener('click', () => {
@@ -1539,29 +1543,107 @@ $('#rcGo').addEventListener('click', () => {
 // «Stampa schermata»: pagina A3 con le due piante zonate, le accensioni e i calendari
 const dayList = gs => { const s = [...gs].sort(), N = ['', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab']; if (!s.length) return '—'; const out = []; let a = s[0], b = a; for (const g of s.slice(1)) { if (g === b + 1) b = g; else { out.push([a, b]); a = b = g; } } out.push([a, b]); return out.map(([x, y]) => x === y ? N[x] : y === x + 1 ? N[x] + ', ' + N[y] : N[x] + '–' + N[y]).join(', '); };
 const dShort = d => { const t = parseISO(d); return DAYS[t.getDay()] + ' ' + t.getDate() + '/' + (t.getMonth() + 1); };
-async function heatPrintHtml() {
-  const R = RISC(), o = pdfOpt(), today = iso(new Date()), cap = c => { try { return c.toDataURL('image/jpeg', 0.92); } catch (e) { return ''; } };
+// PDF A3 orizzontale generato direttamente (jsPDF): stesso risultato su qualunque browser
+async function heatPdf() {
+  const JsPDF = await loadJsPdf(), R = RISC(), today = iso(new Date());
   await renderHeatMaps();
-  const zt = z => `<span class="zsw" style="background:${ZCOL[z]}"></span>${ZONE[z]}`;
-  const fissi = '<table class="grid pr"><thead><tr><th>Zona</th><th>Giorni</th><th>Orario</th><th>Attività</th></tr></thead><tbody>' +
-    (R.fissi.map(f => `<tr><td>${zt(f.zona)}</td><td>${dayList(f.giorni)}</td><td>${f.dal}–${f.al}</td><td>${esc(f.att)}</td></tr>`).join('') || '<tr><td colspan="4">—</td></tr>') + '</tbody></table>';
-  const occ = (R.occ || []).filter(x => (x.al || x.dal) >= today).sort((p, q) => (p.dal + p.dalle).localeCompare(q.dal + q.dalle));
-  const zl = z => z.split('').map(k => `<b style="color:${ZCOL[k]}">${k}</b>`).join('+');
-  const occT = '<table class="grid pr"><thead><tr><th>Quando</th><th>Zone</th><th>Orario</th><th>Motivo</th></tr></thead><tbody>' +
-    (occ.map(x => `<tr><td>${dShort(x.dal)}${x.al && x.al !== x.dal ? ' → ' + dShort(x.al) : ''}</td><td>${zl(x.zone)}</td><td>${x.dalle}–${x.alle}</td><td>${esc(x.att || '')}</td></tr>`).join('') || '<tr><td colspan="4">Nessuna accensione occasionale in programma.</td></tr>') + '</tbody></table>';
-  const hdr = o.hdr ? `<img class="phdr" src="${await headerImage('IC VIA TACITO - PLESSO ENRICO MESTICA - RISCALDAMENTO', 400, 18)}">` : '';
-  const foot = pn => '<div class="pfoot"><div class="l"><img src="' + LOGO_MS.src + '"><span>Gestione locali Mestica</span></div>' +
-    `<div>Scuola secondaria Mestica · Riscaldamento · stampa del ${fmt(today)} · pag. ${pn}</div><div class="r"></div></div>`;   // solo il logo MestSpace
-  const leg = '<div class="heatleg">' + ['A', 'B', 'C'].map(z => `<span>${zt(z)}</span>`).join('') + '<span><span class="zsw" style="background:#8a8a8a"></span>senza zona</span></div>';
+  const doc = new JsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
+  const PW = 420, PH = 297, m = 10, W = PW - 2 * m;
+  const hdrImg = await headerImage('IC VIA TACITO - PLESSO ENRICO MESTICA - RISCALDAMENTO', W, 18);
+  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const T = (t, x, y, o = {}) => { doc.setFont('helvetica', o.b ? 'bold' : 'normal'); doc.setFontSize(o.fs || 11); doc.setTextColor(...(o.c || [30, 30, 30])); doc.text(String(t), x, y, o.al ? { align: o.al } : undefined); };
+  const dot = (x, y, z, r = 1.7) => { doc.setFillColor(...hex(ZCOL[z] || ZCOL[''])); doc.circle(x, y, r, 'F'); };
+  const head = () => { doc.addImage(hdrImg, 'PNG', m, m, W, 18); return m + 18 + 5; };
+  const foot = pn => {
+    const fh = 8, fy = PH - m - fh + 2, ty = fy + fh / 2 + 1, wMS = fh * LOGO_MS.w / LOGO_MS.h;
+    doc.addImage(LOGO_MS.src, 'PNG', m, fy, wMS, fh); T('Gestione locali Mestica', m + wMS + 3, ty, { fs: 10, c: [60, 60, 60] });
+    T(`Scuola secondaria Mestica · Riscaldamento · stampa del ${fmt(today)} · pag. ${pn}`, PW / 2, ty, { fs: 10, c: [90, 90, 90], al: 'center' });
+  };
+  // tabella: cols = [{w (mm), al}], cells = stringhe oppure {t, c, b, zone}
+  const table = (x, y, cols, head_, rows, o = {}) => {
+    const rh = o.rh || 8, fs = o.fs || 11; let cx;
+    doc.setFillColor(222, 232, 214); doc.rect(x, y, cols.reduce((a, c) => a + c.w, 0), rh, 'F');
+    cx = x; head_.forEach((h, i) => { T(h, cx + 2, y + rh - 2.4, { b: 1, fs }); cx += cols[i].w; });
+    y += rh;
+    rows.forEach(r => {
+      cx = x;
+      if (r.bg) { doc.setFillColor(...r.bg); doc.rect(x, y, cols.reduce((a, c) => a + c.w, 0), rh, 'F'); }
+      r.cells.forEach((c, i) => {
+        const o2 = typeof c === 'object' ? c : { t: c };
+        let tx = cx + 2;
+        if (o2.zone) { dot(tx + 1.7, y + rh / 2, o2.zone); tx += 5; }
+        if (o2.zones) { o2.zones.forEach(z => { T(z, tx, y + rh - 2.4, { b: 1, fs, c: hex(ZCOL[z]) }); tx += 5.5; }); }
+        else T(o2.t, tx, y + rh - 2.4, { fs, b: o2.b, c: o2.c });
+        cx += cols[i].w;
+      });
+      doc.setDrawColor(190); doc.setLineWidth(0.2); doc.line(x, y + rh, x + cols.reduce((a, c) => a + c.w, 0), y + rh);
+      y += rh;
+    });
+    return y;
+  };
+  /* ---- pagina 1 ---- */
+  let y = head();
+  const gap = 6, mw = (W - gap) / 2, mh = 128, cap = c => { try { return c.toDataURL('image/jpeg', 0.92); } catch (e) { return ''; } };
+  [['Piano terra', $('#heatT')], ['Primo piano', $('#heatP')]].forEach(([name, cv], i) => {
+    const x0 = m + i * (mw + gap);
+    doc.setFillColor(238, 242, 234); doc.rect(x0, y, mw, 7, 'F'); T(name, x0 + 2, y + 5, { b: 1, fs: 12 });
+    if (cv.width && cv.height) {
+      const k = Math.min(mw / cv.width, mh / cv.height), w = cv.width * k, h = cv.height * k;
+      doc.addImage(cap(cv), 'JPEG', x0 + (mw - w) / 2, y + 8, w, h);
+    }
+    doc.setDrawColor(150); doc.setLineWidth(0.3); doc.rect(x0, y, mw, 8 + mh);
+  });
+  y += 8 + mh + 6;
+  let lx = m;   // legenda
+  ['A', 'B', 'C', ''].forEach(z => { dot(lx + 1.7, y - 1.3, z); const t = z ? ZONE[z] : 'senza zona'; T(t, lx + 5, y, { fs: 11 }); lx += 12 + t.length * 2.1; });
+  y += 4;
   const warn = $('#heatWarn').innerText.trim();
-  const p1 = `<div class="pa pa-risc">${hdr}<div class="maps"><figure><figcaption>Piano terra</figcaption><img src="${cap($('#heatT'))}"></figure><figure><figcaption>Primo piano</figcaption><img src="${cap($('#heatP'))}"></figure></div>${leg}${warn ? `<p class="hint">${esc(warn)}</p>` : ''}` +
-    `<div class="cols"><div><h3>Regole di accensione</h3><p class="psub">Base ${R.da}–${R.a} · massimo ${R.max} ore al giorno per zona · variazioni da comunicare almeno ${R.anticipo} giorni prima. Sabato pomeriggio sempre spento.</p><h3>Accensioni fisse oltre la base</h3>${fissi}</div><div>${calFisso()}</div></div>${foot(1)}</div>`;
-  const p2 = `<div class="pa pa-risc">${hdr}<div class="occ1"><h3>Accensioni occasionali in programma</h3>${occT}</div>${foot(2)}</div>`;
-  return p1 + (occ.length ? p2 : '');
+  if (warn) { T(warn, m, y + 3, { fs: 10, c: [150, 60, 20] }); y += 6; }
+  y += 4;
+  // colonna sinistra: regole + accensioni fisse
+  const lw = 160;
+  T('Regole di accensione', m, y + 5, { b: 1, fs: 14 });
+  T(`Base ${R.da}-${R.a} · massimo ${R.max} ore al giorno per zona.`, m, y + 11, { fs: 10.5 });
+  T(`Variazioni da comunicare almeno ${R.anticipo} giorni prima. Sabato pomeriggio sempre spento.`, m, y + 16, { fs: 10.5 });
+  T('Accensioni fisse oltre la base', m, y + 25, { b: 1, fs: 14 });
+  const fcols = [{ w: 50 }, { w: 34 }, { w: 30 }, { w: 46 }];
+  table(m, y + 28, fcols, ['Zona', 'Giorni', 'Orario', 'Attività'],
+    R.fissi.map(f => ({ cells: [{ t: ZONE[f.zona].split(' · ')[0] + ' · ' + ZONE[f.zona].split(' · ')[1].split(' (')[0], zone: f.zona }, dayList(f.giorni), `${f.dal}-${f.al}`, f.att] })), { fs: 10.5 });
+  // colonna destra: calendario fisso
+  const cal = calFissoData(), rx = m + lw + 10, rw = W - lw - 10;
+  T('Calendario fisso · settimana tipo', rx, y + 5, { b: 1, fs: 14 });
+  const cw0 = 30, cwf = 42, cwz = (rw - cw0 - cwf) / cal.zs.length;
+  const ccols = [{ w: cw0 }, ...cal.zs.map(() => ({ w: cwz })), { w: cwf }];
+  const ye = table(rx, y + 8, ccols, ['Giorno', ...cal.zs.map(z => 'Zona ' + z), 'Fascia oraria'],
+    cal.rows.map(r => ({ cells: [{ t: r.g, b: 1 }, ...r.on.map(o => ({ t: o ? 'ACCESO' : 'SPENTO', b: o, c: o ? [194, 65, 12] : [107, 154, 196] })), r.fascia] })), { rh: 8.5, fs: 11 });
+  doc.setFontSize(9.5); doc.setTextColor(90); doc.text(doc.splitTextToSize(cal.nota, rw), rx, ye + 5);
+  foot(1);
+  /* ---- pagina 2: solo occasionali, se ce ne sono ---- */
+  const occ = (R.occ || []).filter(x => (x.al || x.dal) >= today).sort((p, q) => (p.dal + p.dalle).localeCompare(q.dal + q.dalle));
+  if (occ.length) {
+    doc.addPage(); let pn = 2; y = head();
+    T('Accensioni occasionali in programma', m, y + 5, { b: 1, fs: 16 }); y += 10;
+    const oc = [{ w: 70 }, { w: 40 }, { w: 40 }, { w: 130 }];
+    const hh = 8.5;
+    const hd = () => { doc.setFillColor(222, 232, 214); doc.rect(m, y, 280, hh, 'F'); let cx = m; ['Quando', 'Zone', 'Orario', 'Motivo'].forEach((h, i) => { T(h, cx + 2, y + hh - 2.6, { b: 1, fs: 12 }); cx += oc[i].w; }); y += hh; };
+    hd();
+    occ.forEach(x => {
+      if (y + hh > PH - m - 14) { foot(pn); doc.addPage(); pn++; y = head(); hd(); }
+      const q = dShort(x.dal) + (x.al && x.al !== x.dal ? ' - ' + dShort(x.al) : '');
+      let cx = m; T(q, cx + 2, y + hh - 2.6, { fs: 12 }); cx += oc[0].w;
+      let tx = cx + 2; x.zone.split('').forEach(z => { T(z, tx, y + hh - 2.6, { b: 1, fs: 12, c: hex(ZCOL[z]) }); tx += 6; }); cx += oc[1].w;
+      T(`${x.dalle}-${x.alle}`, cx + 2, y + hh - 2.6, { fs: 12 }); cx += oc[2].w;
+      T(x.att || '', cx + 2, y + hh - 2.6, { fs: 12 });
+      doc.setDrawColor(190); doc.setLineWidth(0.2); doc.line(m, y + hh, m + 280, y + hh);
+      y += hh;
+    });
+    foot(pn);
+  }
+  return doc;
 }
 $('#rcPrint').addEventListener('click', async () => {
-  $('#printArea').innerHTML = await heatPrintHtml();
-  document.body.classList.add('print-sett'); window.print();
+  try { const doc = await heatPdf(); doc.save(`riscaldamento-${iso(new Date())}.pdf`); }
+  catch (err) { await uiAlert('Impossibile creare il PDF: ' + err.message); }
 });
 function renderFissi() {
   const R = RISC(), Z = ['A', 'B', 'C'], D = ['L', 'M', 'M', 'G', 'V', 'S'];
