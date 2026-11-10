@@ -1601,13 +1601,8 @@ async function heatPdf() {
   const warn = $('#heatWarn').innerText.trim();
   if (warn) { T(warn, m, y + 3, { fs: 10, c: [150, 60, 20] }); y += 6; }
   y += 4;
-  // colonna sinistra: regole + accensioni fisse
-  const lw = 125;
-  T('Regole di accensione', m, y + 5, { b: 1, fs: 14 });
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(30);
-  doc.text(doc.splitTextToSize(`Base ${R.da}-${R.a} (sabato fino alle ${R.sab}) · massimo ${R.max} ore al giorno per zona. Variazioni da comunicare almeno ${R.anticipo} giorni prima.`, lw), m, y + 12);
-  // colonna destra: calendario fisso
-  const cal = calFissoData(), rx = m + lw + 10, rw = W - lw - 10;
+  // prospetto centrato nella pagina
+  const cal = calFissoData(), rw = 300, rx = (PW - rw) / 2;
   T('Prospetto', rx, y + 5, { b: 1, fs: 14 });
   const cw0 = 30, cwf = 44, sw = (rw - cw0 - cwf) / (cal.zs.length * 2), y0 = y + 8;
   doc.setFillColor(222, 232, 214); doc.rect(rx, y0, rw, 15, 'F');
@@ -1632,18 +1627,18 @@ async function heatPdf() {
   if (occ.length) {
     doc.addPage(); let pn = 2; y = head();
     T('Accensioni occasionali in programma', m, y + 5, { b: 1, fs: 16 }); y += 10;
-    const oc = [{ w: 70 }, { w: 40 }, { w: 40 }, { w: 130 }];
+    const oc = [{ w: 80 }, { w: 36 }, { w: 54 }, { w: 130 }];
     const hh = 8.5;
-    const hd = () => { doc.setFillColor(222, 232, 214); doc.rect(m, y, 280, hh, 'F'); let cx = m; ['Quando', 'Zone', 'Orario', 'Motivo'].forEach((h, i) => { T(h, cx + 2, y + hh - 2.6, { b: 1, fs: 12 }); cx += oc[i].w; }); y += hh; };
+    const hd = () => { doc.setFillColor(222, 232, 214); doc.rect(m, y, 300, hh, 'F'); let cx = m; ['Quando', 'Zone', 'Orario', 'Motivo'].forEach((h, i) => { T(h, cx + 2, y + hh - 2.6, { b: 1, fs: 12 }); cx += oc[i].w; }); y += hh; };
     hd();
     occ.forEach(x => {
       if (y + hh > PH - m - 14) { foot(pn); doc.addPage(); pn++; y = head(); hd(); }
-      const q = dShort(x.dal) + (x.al && x.al !== x.dal ? ' - ' + dShort(x.al) : '');
+      const q = x.al && x.al !== x.dal ? `da ${dShort(x.dal)} a ${dShort(x.al)}` : dShort(x.dal);
       let cx = m; T(q, cx + 2, y + hh - 2.6, { fs: 12 }); cx += oc[0].w;
       let tx = cx + 2; x.zone.split('').forEach(z => { T(z, tx, y + hh - 2.6, { b: 1, fs: 12, c: hex(ZCOL[z]) }); tx += 6; }); cx += oc[1].w;
-      T(`${x.dalle}-${x.alle}`, cx + 2, y + hh - 2.6, { fs: 12 }); cx += oc[2].w;
+      T(`dalle ${x.dalle} alle ${x.alle}`, cx + 2, y + hh - 2.6, { fs: 12 }); cx += oc[2].w;
       T(x.att || '', cx + 2, y + hh - 2.6, { fs: 12 });
-      doc.setDrawColor(190); doc.setLineWidth(0.2); doc.line(m, y + hh, m + 280, y + hh);
+      doc.setDrawColor(190); doc.setLineWidth(0.2); doc.line(m, y + hh, m + 300, y + hh);
       y += hh;
     });
     foot(pn);
