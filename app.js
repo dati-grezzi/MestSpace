@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-11-10 · stampa riscaldamento in PDF diretto';
+const VERSION = '2026-11-10 · PDF riscaldamento: giorni a caselle, sabato mattina';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -1524,13 +1524,13 @@ function calFissoData() {
       if (pm.length) fine = Math.max(fine, ...pm.map(x => x[1]));
       return !!pm.length;
     });
-    return { g: G[g], on, fascia: fine ? ini + ' – ' + hmm(fine) : '' };
+    return { g: G[g], on, fascia: ini + ' – ' + hmm(Math.max(fine, be)) };
   });
-  return { zs, rows, ini, nota: `Ogni settimana, salvo variazioni. ACCESO = accensione anche nel pomeriggio, oltre la base del mattino. Fascia oraria: dall'inizio delle lezioni (${ini}) alla fine dell'accensione più tarda.` };
+  return { zs, rows, ini, nota: `Ogni settimana, salvo variazioni. Tutte le zone sono accese ogni mattina, sabato compreso (base ${R.da}-${R.a}). POMERIGGIO = accensione anche nel pomeriggio; il sabato pomeriggio è sempre spento. Fascia oraria: dall'inizio delle lezioni (${ini}) alla fine dell'accensione più tarda.` };
 }
 function calFisso() {
   const c = calFissoData();
-  const tr = c.rows.map(r => `<tr><th>${r.g}</th>${r.on.map(o => o ? '<td style="color:#c2410c"><b>ACCESO</b></td>' : '<td style="color:#6b9ac4">SPENTO</td>').join('')}<td>${r.fascia}</td></tr>`).join('');
+  const tr = c.rows.map(r => `<tr><th>${r.g}</th>${r.on.map(o => o ? '<td style="color:#c2410c"><b>Mattino + pomeriggio</b></td>' : '<td style="color:#2e7d32">Solo mattino</td>').join('')}<td>${r.fascia}</td></tr>`).join('');
   return `<h4 style="margin:6px 0">Calendario fisso · settimana tipo</h4><table class="grid"><thead><tr><th>Giorno</th>${c.zs.map(z => `<th>${CIRC_L[z]}</th>`).join('')}<th>Fascia oraria</th></tr></thead><tbody>${tr}</tbody></table><p class="hint">${c.nota}</p>`;
 }
 $('#rcCal').addEventListener('click', () => { $('#rcOut').innerHTML = calFisso(); document.body.dataset.rc = 'cal'; });
@@ -1571,9 +1571,13 @@ async function heatPdf() {
       r.cells.forEach((c, i) => {
         const o2 = typeof c === 'object' ? c : { t: c };
         let tx = cx + 2;
-        if (o2.zone) { dot(tx + 1.7, y + rh / 2, o2.zone); tx += 5; }
+        if (o2.days) { ['L', 'M', 'M', 'G', 'V', 'S'].forEach((l, k) => { const bx = tx + k * 8.2, on = o2.days.includes(k + 1), by = y + rh / 2 - 1.8;
+          doc.setDrawColor(90); doc.setLineWidth(0.3); doc.rect(bx, by, 3.6, 3.6);
+          if (on) { doc.setFillColor(25, 118, 210); doc.rect(bx, by, 3.6, 3.6, 'F'); doc.setDrawColor(255); doc.setLineWidth(0.5); doc.line(bx + 0.7, by + 1.9, bx + 1.5, by + 2.8); doc.line(bx + 1.5, by + 2.8, bx + 2.9, by + 0.8); }
+          T(l, bx + 4.3, y + rh - 2.4, { fs: 9.5 }); }); }
+        else if (o2.zone) { dot(tx + 1.7, y + rh / 2, o2.zone); tx += 5; }
         if (o2.zones) { o2.zones.forEach(z => { T(z, tx, y + rh - 2.4, { b: 1, fs, c: hex(ZCOL[z]) }); tx += 5.5; }); }
-        else T(o2.t, tx, y + rh - 2.4, { fs, b: o2.b, c: o2.c });
+        else if (!o2.days) T(o2.t, tx, y + rh - 2.4, { fs, b: o2.b, c: o2.c });
         cx += cols[i].w;
       });
       doc.setDrawColor(190); doc.setLineWidth(0.2); doc.line(x, y + rh, x + cols.reduce((a, c) => a + c.w, 0), y + rh);
@@ -1601,21 +1605,21 @@ async function heatPdf() {
   if (warn) { T(warn, m, y + 3, { fs: 10, c: [150, 60, 20] }); y += 6; }
   y += 4;
   // colonna sinistra: regole + accensioni fisse
-  const lw = 160;
+  const lw = 179;
   T('Regole di accensione', m, y + 5, { b: 1, fs: 14 });
   T(`Base ${R.da}-${R.a} · massimo ${R.max} ore al giorno per zona.`, m, y + 11, { fs: 10.5 });
   T(`Variazioni da comunicare almeno ${R.anticipo} giorni prima. Sabato pomeriggio sempre spento.`, m, y + 16, { fs: 10.5 });
   T('Accensioni fisse oltre la base', m, y + 25, { b: 1, fs: 14 });
-  const fcols = [{ w: 50 }, { w: 34 }, { w: 30 }, { w: 46 }];
+  const fcols = [{ w: 44 }, { w: 54 }, { w: 24 }, { w: 57 }];
   table(m, y + 28, fcols, ['Zona', 'Giorni', 'Orario', 'Attività'],
-    R.fissi.map(f => ({ cells: [{ t: ZONE[f.zona].split(' · ')[0] + ' · ' + ZONE[f.zona].split(' · ')[1].split(' (')[0], zone: f.zona }, dayList(f.giorni), `${f.dal}-${f.al}`, f.att] })), { fs: 10.5 });
+    R.fissi.map(f => ({ cells: [{ t: ZONE[f.zona].split(' · ')[0] + ' · ' + ZONE[f.zona].split(' · ')[1].split(' (')[0], zone: f.zona }, { days: f.giorni }, `${f.dal}-${f.al}`, f.att] })), { fs: 10.5 });
   // colonna destra: calendario fisso
   const cal = calFissoData(), rx = m + lw + 10, rw = W - lw - 10;
   T('Calendario fisso · settimana tipo', rx, y + 5, { b: 1, fs: 14 });
   const cw0 = 30, cwf = 42, cwz = (rw - cw0 - cwf) / cal.zs.length;
   const ccols = [{ w: cw0 }, ...cal.zs.map(() => ({ w: cwz })), { w: cwf }];
   const ye = table(rx, y + 8, ccols, ['Giorno', ...cal.zs.map(z => 'Zona ' + z), 'Fascia oraria'],
-    cal.rows.map(r => ({ cells: [{ t: r.g, b: 1 }, ...r.on.map(o => ({ t: o ? 'ACCESO' : 'SPENTO', b: o, c: o ? [194, 65, 12] : [107, 154, 196] })), r.fascia] })), { rh: 8.5, fs: 11 });
+    cal.rows.map(r => ({ cells: [{ t: r.g, b: 1 }, ...r.on.map(o => ({ t: o ? 'Mattino + pomeriggio' : 'Solo mattino', b: o, c: o ? [194, 65, 12] : [46, 125, 50] })), r.fascia] })), { rh: 8.5, fs: 11 });
   doc.setFontSize(9.5); doc.setTextColor(90); doc.text(doc.splitTextToSize(cal.nota, rw), rx, ye + 5);
   foot(1);
   /* ---- pagina 2: solo occasionali, se ce ne sono ---- */
