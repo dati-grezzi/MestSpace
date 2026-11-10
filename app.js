@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-11-10 · scheda Riscaldamento';
+const VERSION = '2026-11-10 · piante zonate nel riscaldamento';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -347,6 +347,7 @@ $('#formAss').modo.addEventListener('change', updateModo);
 /* ---------- planimetrie ---------- */
 const canvas = $('#planCanvas');
 const ctx = canvas.getContext('2d');
+window.__c2d = ctx;   // contesto predefinito per i disegni condivisi (aree)
 let img = null, imgPiano = null;
 
 function idbOpen() {
@@ -455,7 +456,7 @@ const vertexAt = (p, pt) => {   // vertice del percorso o dell'area selezionati 
 let drawingArea = null, selArea = null, areaCursor = null, areaRaf = 0, placingName = false;
 const areasOf = p => (p.areas = p.areas || []);
 const PATS = { pieno: 'Pieno', diag: 'Righe oblique /', diag2: 'Righe oblique \\', oriz: 'Righe orizzontali', vert: 'Righe verticali', quadri: 'Quadretti', croce: 'Reticolo obliquo', punti: 'Puntini' };
-function areaFill(ar, W) {   // riempimento (colore pieno o motivo) per l'area
+function areaFill(ar, W, ctx = window.__c2d) {   // riempimento (colore pieno o motivo) per l'area
   if (!ar.pat || ar.pat === 'pieno') return ar.color || '#1976D2';
   const s = Math.max(6, Math.round(W / 140 * (ar.pw || 1))), c = document.createElement('canvas'); c.width = c.height = s;
   const g = c.getContext('2d'); g.strokeStyle = g.fillStyle = ar.color || '#1976D2'; g.lineWidth = Math.max(1, s / 6); g.lineCap = 'square';
@@ -467,14 +468,14 @@ function areaFill(ar, W) {   // riempimento (colore pieno o motivo) per l'area
   if (ar.pat === 'punti') { g.beginPath(); g.arc(s / 2, s / 2, s / 5, 0, 7); g.fill(); }
   return ctx.createPattern(c, 'repeat');
 }
-function drawAreas(p, W, H) {
-  if (!$('#showAreas').checked) return;
+function drawAreas(p, W, H, ctx = window.__c2d, only = null) {
+  if (!only && !$('#showAreas').checked) return;
   areasOf(p).forEach(ar => {
-    const g = groupOf(p, ar); if (!g.vis || ar.pts.length < 2) return;
+    const g = groupOf(p, ar); if (only ? !only(ar) : !g.vis) return; if (ar.pts.length < 2) return;
     const pts = ar.pts.map(q => [q.x * W, q.y * H]), edit = !exporting && (ar.id === selArea || ar === drawingArea);
     ctx.save();
     ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); if (ar !== drawingArea) ctx.closePath();
-    if (pts.length >= 3) { ctx.globalAlpha = ar.op ?? 0.35; ctx.fillStyle = areaFill(ar, W); ctx.fill(); }
+    if (pts.length >= 3) { ctx.globalAlpha = ar.op ?? 0.35; ctx.fillStyle = areaFill(ar, W, ctx); ctx.fill(); }
     ctx.globalAlpha = 1;
     if (ar.line !== false || edit) {
       ctx.strokeStyle = ar.color || '#1976D2'; ctx.lineWidth = Math.max(1.5, W / 500) * (edit ? 1.4 : 1); ctx.lineJoin = 'round';
@@ -1406,6 +1407,51 @@ $('#chiFest').addEventListener('click', () => {
 });
 renderChiusure();
 
+
+/* ---------- scheda Riscaldamento: le due piante affiancate con le zone ---------- */
+const ZCOL = { A: '#1976D2', B: '#8D7B4F', C: '#D81B60', '': '#8a8a8a' };
+const isZoneArea = ar => /^\s*zona\s*[abc]\b/i.test(ar.name || '');
+const inPoly = (pt, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const a = poly[i], b = poly[j]; if ((a.y > pt.y) !== (b.y > pt.y) && pt.x < (b.x - a.x) * (pt.y - a.y) / (b.y - a.y) + a.x) c = !c; } return c; };
+async function drawHeat(piano, cv) {
+  const p = S.plans[piano], im = await loadImg(piano), c = cv.getContext('2d');
+  if (!im) { cv.width = 600; cv.height = 100; c.fillStyle = '#fff'; c.fillRect(0, 0, 600, 100); c.fillStyle = '#555'; c.font = '15px sans-serif'; c.fillText('Planimetria non caricata (scheda Planim.).', 16, 55); return []; }
+  grpsOf(piano);
+  const rot = p.rot || 0, side = rot % 180 !== 0, rw = side ? im.height : im.width, rh = side ? im.width : im.height, sc = Math.min(1, 1300 / rw);
+  const W = Math.round(rw * sc), H = Math.round(rh * sc); cv.width = W; cv.height = H;
+  c.fillStyle = '#fff'; c.fillRect(0, 0, W, H);
+  c.save(); c.translate(W / 2, H / 2); c.rotate(rot * Math.PI / 180); c.drawImage(im, -im.width * sc / 2, -im.height * sc / 2, im.width * sc, im.height * sc); c.restore();
+  const zareas = areasOf(p).filter(isZoneArea);
+  const wasExp = exporting; exporting = true;   // niente maniglie di modifica
+  try { drawAreas(p, W, H, c, zareas.length ? isZoneArea : (ar => groupOf(p, ar).vis)); } finally { exporting = wasExp; }
+  const seen = new Set(), mism = [];
+  const fs = Math.max(11, W / 80);
+  for (const [key, pt] of Object.entries(p.points)) {
+    if (!key.startsWith('n:')) continue;
+    const bk = key.replace(/#.*$/, '').slice(2); if (seen.has(bk)) continue; seen.add(bk);
+    const r = room(bk); if (!r || r.numero == null) continue;
+    const z = r.zona || '', x = pt.x * W, y = pt.y * H;
+    const pz = zareas.find(ar => inPoly(pt, ar.pts)), pl = pz ? ((pz.name.match(/zona\s*([abc])/i) || [])[1] || '').toUpperCase() : '';
+    const bad = pz && z && pl !== z || (pz && !z);
+    if (bad) mism.push(`aula ${r.numero}: assegnata a ${z || 'nessuna zona'}, ma nel disegno è in zona ${pl}`);
+    c.beginPath(); c.arc(x, y, fs * 1.05, 0, 7); c.fillStyle = ZCOL[z]; c.fill(); c.lineWidth = bad ? 4 : 2; c.strokeStyle = bad ? '#d00000' : '#fff'; c.stroke();
+    c.fillStyle = '#fff'; c.font = `bold ${fs}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(r.numero), x, y + 1);
+  }
+  // locali senza numero in pianta (uffici ecc.): nome con il colore della zona
+  for (const [key, pt] of Object.entries(p.points)) {
+    if (!key.startsWith('e:')) continue;
+    const bk = key.replace(/#.*$/, '').slice(2); if (seen.has('e' + bk)) continue; seen.add('e' + bk);
+    const r = room(bk); if (!r || r.numero != null || !r.zona) continue;
+    const x = pt.x * W, y = pt.y * H, t = r.nome; c.font = `${fs * 0.9}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    const w = c.measureText(t).width + 8; c.fillStyle = ZCOL[r.zona]; c.fillRect(x - w / 2, y - fs * 0.7, w, fs * 1.4); c.fillStyle = '#fff'; c.fillText(t, x, y + 1);
+  }
+  return mism;
+}
+async function renderHeatMaps() {
+  if ($('#tab-riscaldamento').hidden) return;
+  const m1 = await drawHeat('terra', $('#heatT')), m2 = await drawHeat('primo', $('#heatP'));
+  const mm = [...m1.map(t => 'Terra · ' + t), ...m2.map(t => 'Primo · ' + t)];
+  $('#heatWarn').innerHTML = mm.length ? '⚠ Differenze tra assegnazione e disegno:<br>' + mm.map(esc).join('<br>') : '';
+}
 /* ---------- riscaldamento: zone e prospetto per la ditta ---------- */
 const RISC = () => {
   S.risc = S.risc || {};
@@ -1425,7 +1471,7 @@ function renderZone() {
   $('#rcRooms').innerHTML = '<table class="grid"><thead><tr><th>N.</th><th>Locale</th><th>Piano</th><th>Zona</th></tr></thead><tbody>' +
     S.rooms.map(r => `<tr><th class="rn">${esc(r.numero ?? '')}</th><td>${esc(r.nome)}</td><td>${r.piano}</td><td><select data-zr="${r.id}">${opt(r.zona || '')}</select></td></tr>`).join('') + '</tbody></table>';
 }
-$('#rcRooms').addEventListener('change', e => { const s = e.target.closest('select[data-zr]'); if (!s) return; const r = room(s.dataset.zr); if (r) { r.zona = s.value; save(); } });
+$('#rcRooms').addEventListener('change', e => { const s = e.target.closest('select[data-zr]'); if (!s) return; const r = room(s.dataset.zr); if (r) { r.zona = s.value; save(); renderHeatMaps(); } });
 ['rcDa', 'rcA', 'rcMax', 'rcPre', 'rcAnt'].forEach(id => $('#' + id).addEventListener('change', () => {
   const R = RISC(); R.da = $('#rcDa').value || '06:00'; R.a = $('#rcA').value || '12:00'; R.max = +$('#rcMax').value || 10; R.pre = +$('#rcPre').value || 0; R.anticipo = +$('#rcAnt').value || 0; save();
 }));
@@ -1543,6 +1589,7 @@ try { const sb = localStorage.getItem('mestspace-sub'); const b = sb && document
 document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
   document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
   document.querySelectorAll('main > section').forEach(s => s.hidden = s.id !== 'tab-' + b.dataset.tab);
+  if (b.dataset.tab === 'riscaldamento') renderHeatMaps();
   document.body.classList.remove('print-report');
   if (b.dataset.tab === 'planimetrie') drawPlan();
   if (b.dataset.tab === 'report') renderReport();

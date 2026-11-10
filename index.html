@@ -33,6 +33,13 @@
   nav{position:fixed;bottom:0;left:0;right:0;max-width:760px;margin:0 auto;display:flex;background:var(--paper2);border-top:2px solid var(--ink);z-index:100}
   nav button{flex:1;border:none;border-radius:0;background:none;padding:9px 0 7px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--ink-soft);font-family:inherit}
   nav button.on{color:var(--teal)}
+  .heatmaps{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px}
+  .heatmaps figure{margin:0;border:1px solid var(--rule-soft);background:#fff}
+  .heatmaps figcaption{padding:3px 8px;font-weight:700;background:var(--paper)}
+  .heatmaps canvas{width:100%;height:auto;display:block}
+  .heatleg{display:flex;flex-wrap:wrap;gap:14px;margin:4px 0 10px;font-size:13px}
+  .heatleg i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+  @media(max-width:800px){.heatmaps{grid-template-columns:1fr}}
   .subtabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
   .subtabs button{border-radius:999px;padding:6px 14px}
   .subtabs button.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
@@ -419,6 +426,12 @@
   </section>
 
   <section id="tab-riscaldamento" hidden>
+    <div class="heatmaps">
+      <figure><figcaption>Piano terra</figcaption><canvas id="heatT"></canvas></figure>
+      <figure><figcaption>Primo piano</figcaption><canvas id="heatP"></canvas></figure>
+    </div>
+    <div class="heatleg"><span><i style="background:#1976D2"></i>Zona A · Atrio e segreteria</span><span><i style="background:#8D7B4F"></i>Zona B · Aule nuove</span><span><i style="background:#D81B60"></i>Zona C · Aule vecchie</span><span><i style="background:#8a8a8a"></i>senza zona</span></div>
+    <div id="heatWarn" class="hint"></div>
     <div class="bar">
       <b>Riscaldamento (zone):</b>
       <label>base dalle <input type="time" id="rcDa"></label><label>alle <input type="time" id="rcA"></label>
@@ -550,6 +563,6 @@
     <div class="aepane"><div class="aeh">Mappa aerea <button id="aeZaOut">−</button><button id="aeZaIn">+</button></div><div class="aesc"><div id="aeAw"><canvas id="aeAc"></canvas></div></div></div>
   </div>
 </div>
-<script src="app.js?v=20261110b"></script>
+<script src="app.js?v=20261110c"></script>
 </body>
 </html>
