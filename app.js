@@ -1478,9 +1478,10 @@ $('#rcRooms').addEventListener('change', e => { const s = e.target.closest('sele
 const hmm = m => pad(Math.floor(m / 60)) + ':' + pad(m % 60);
 const CIRC = { A: ['A'], B: ['B'], C: ['C'] };   // la richiesta alla ditta è per zona, separata: la gestione dei circuiti spetta a loro
 const CIRC_L = ZONE;
-function zoneDay(zs, g, items) {   // intervalli di accensione di un gruppo di zone in un giorno: base + fissi + attività fuori base
+function zoneDay(zs, g, items, date) {   // intervalli di accensione di un gruppo di zone in un giorno: base + fissi + attività fuori base
   const R = RISC(), bs = toMin(R.da), be = toMin(R.a), fx = fissiOf(zs, g).map(f => [toMin(f.dal), toMin(f.al)]), cov = mergeIv([[bs, be], ...fx]);
-  const rs = items.filter(i => zs.includes((room(i.roomId) || {}).zona));
+  const occ = !date ? [] : (RISC().occ || []).filter(o => date >= o.dal && date <= (o.al || o.dal) && o.zone.split('').some(z => zs.includes(z))).map(o => ({ dalle: o.dalle, alle: o.alle, etichetta: o.att || 'Accensione occasionale', roomId: null, occ: true }));
+  const rs = [...items.filter(i => zs.includes((room(i.roomId) || {}).zona)), ...occ];
   const varr = rs.filter(i => { const a = toMin(i.dalle) - R.pre, b = toMin(i.alle); return !cov.some(c => c[0] <= a && c[1] >= b); });
   const iv = mergeIv([...cov, ...varr.map(i => [toMin(i.dalle) - R.pre, toMin(i.alle)])]);
   const tot = () => iv.reduce((s, x) => s + (x[1] - x[0]), 0) / 60;
@@ -1498,7 +1499,7 @@ function riscData(dal, al) {   // per ogni giorno e zona
     const g = parseISO(d).getDay();
     if (!g || closureOf(d)) continue;
     const it = dayItems(d), day = { date: d, z: {} };
-    Object.entries(CIRC).forEach(([z, zs]) => { day.z[z] = zoneDay(zs, g, it); });
+    Object.entries(CIRC).forEach(([z, zs]) => { day.z[z] = zoneDay(zs, g, it, d); });
     out.push(day);
   }
   return out;
@@ -1508,7 +1509,7 @@ function riscHtml(dal, al, soloVar) {
   const R = RISC(), f = d => { const t = parseISO(d); return DAYS[t.getDay()] + ' ' + t.getDate() + '/' + (t.getMonth() + 1); };
   const rows = riscData(dal, al).filter(d => !soloVar || Object.keys(CIRC).some(z => d.z[z].extra.length));
   const cell = c => { const dev = c.extra.length;
-    return `<td${c.over ? ' style="background:#ffd6d6"' : dev || c.rid != null ? ' style="background:#fff2c9"' : ''}>${ivTxt(c.iv)} <small>(${+c.h.toFixed(1)} h)</small>${dev ? '<br><small>' + [...new Set(c.extra.map(i => esc(i.etichetta) + ' ' + i.dalle + '–' + i.alle + ' (' + esc((room(i.roomId) || {}).numero ?? (room(i.roomId) || {}).nome) + ')'))].join('; ') + '</small>' : ''}${c.rid != null ? '<br><small>mattina ridotta per il limite di ' + R.max + ' h</small>' : ''}${c.over ? '<br><b>oltre ' + R.max + ' h</b>' : ''}</td>`; };
+    return `<td${c.over ? ' style="background:#ffd6d6"' : dev || c.rid != null ? ' style="background:#fff2c9"' : ''}>${ivTxt(c.iv)} <small>(${+c.h.toFixed(1)} h)</small>${dev ? '<br><small>' + [...new Set(c.extra.map(i => esc(i.etichetta) + ' ' + i.dalle + '–' + i.alle + ' (' + (i.occ ? 'occasionale' : esc((room(i.roomId) || {}).numero ?? (room(i.roomId) || {}).nome)) + ')'))].join('; ') + '</small>' : ''}${c.rid != null ? '<br><small>mattina ridotta per il limite di ' + R.max + ' h</small>' : ''}${c.over ? '<br><b>oltre ' + R.max + ' h</b>' : ''}</td>`; };
   return `<table class="grid"><thead><tr><th>Giorno</th><th>Comunicare entro</th>${Object.keys(CIRC).map(z => `<th>${CIRC_L[z]}</th>`).join('')}</tr></thead><tbody>` +
     (rows.map(d => `<tr><th>${f(d.date)}</th><td>${f(avviso(d.date, R.anticipo))}</td>${Object.keys(CIRC).map(z => cell(d.z[z])).join('')}</tr>`).join('') || '<tr><td colspan="5">Nessun giorno da mostrare.</td></tr>') +
     `</tbody></table><p class="hint">Base ${R.da}–${R.a} + accensioni fisse (scheda Riscaldamento); giallo = attività fuori dalle fasce già accese; rosso = oltre ${R.max} h di accensione al giorno (somma delle fasce).</p>`;
@@ -1555,7 +1556,20 @@ $('#rcFissi').addEventListener('change', e => {
 });
 $('#rcFissi').addEventListener('click', e => { const b = e.target.closest('button[data-del]'); if (!b) return; RISC().fissi = RISC().fissi.filter(x => x.id !== b.dataset.del); save(); renderFissi(); });
 $('#rcFissoAdd').addEventListener('click', () => { RISC().fissi.push({ id: uid(), zona: 'A', giorni: [1, 2, 3, 4, 5], dal: '13:30', al: '18:30', att: '' }); save(); renderFissi(); });
-renderZone(); renderFissi();
+function renderOcc() {
+  const R = RISC(); R.occ = R.occ || [];
+  const Z = [['A', 'A'], ['B', 'B'], ['C', 'C'], ['ABC', 'Tutte']];
+  $('#rcOccL').innerHTML = R.occ.map(o => `<div class="chi" data-o="${o.id}"><select data-k="zone">${Z.map(([v, t]) => `<option value="${v}"${o.zone === v ? ' selected' : ''}>${t}</option>`).join('')}</select> ` +
+    `dal <input type="date" data-k="dal" value="${o.dal || ''}"> al <input type="date" data-k="al" value="${o.al || ''}" title="vuoto = solo il giorno iniziale"> ` +
+    `<input type="time" data-k="dalle" value="${o.dalle}"> – <input type="time" data-k="alle" value="${o.alle}"> <input data-k="att" value="${esc(o.att || '')}" size="18" placeholder="motivo"> <button data-del="${o.id}">✕</button></div>`).join('');
+}
+$('#rcOccL').addEventListener('change', e => {
+  const row = e.target.closest('[data-o]'); if (!row || !e.target.dataset.k) return; const o = RISC().occ.find(x => x.id === row.dataset.o); if (!o) return;
+  o[e.target.dataset.k] = e.target.value; if (o.al && o.al < o.dal) o.al = o.dal; save(); renderOcc();
+});
+$('#rcOccL').addEventListener('click', e => { const b = e.target.closest('button[data-del]'); if (!b) return; RISC().occ = RISC().occ.filter(x => x.id !== b.dataset.del); save(); renderOcc(); });
+$('#rcOccAdd').addEventListener('click', () => { const R = RISC(); R.occ = R.occ || []; R.occ.push({ id: uid(), zone: 'ABC', dal: iso(new Date()), al: '', dalle: '08:00', alle: '13:00', att: '' }); save(); renderOcc(); });
+renderZone(); renderFissi(); renderOcc();
 $('#exportBtn').addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
