@@ -1528,7 +1528,7 @@ const SQ_ON = '<span style="display:inline-block;width:12px;height:12px;backgrou
 function calFisso() {
   const c = calFissoData(), sq = o => `<td style="text-align:center">${o ? SQ_ON : SQ_OFF}</td>`;
   const tr = c.rows.map(r => `<tr><th>${r.g}</th>${c.zs.map((z, i) => sq(r.am[i]) + sq(r.pm[i])).join('')}<td>${r.fascia}</td></tr>`).join('');
-  return `<h4 style="margin:6px 0">Prospetto</h4><table class="grid"><thead><tr><th rowspan="2">Giorno</th>${c.zs.map(z => `<th colspan="2" style="text-align:center">${CIRC_L[z]}</th>`).join('')}<th rowspan="2">Fascia oraria</th></tr><tr>${c.zs.map(() => '<th>Mattino</th><th>Pomeriggio</th>').join('')}</tr></thead><tbody>${tr}</tbody></table><p class="hint">${SQ_ON} acceso · ${SQ_OFF} spento. Pomeriggio secondo le accensioni fisse oltre la base; fascia oraria dall'inizio delle lezioni (${c.ini}) per le ${RISC().max} ore massime.</p>`;
+  return `<h4 style="margin:6px 0">Prospetto</h4><table class="grid"><thead><tr><th rowspan="2">Giorno</th>${c.zs.map(z => `<th colspan="2" style="text-align:center"><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${ZCOL[z]};margin-right:5px;vertical-align:-1px"></span>${CIRC_L[z]}</th>`).join('')}<th rowspan="2">Fascia oraria</th></tr><tr>${c.zs.map(() => '<th>Mattino</th><th>Pomeriggio</th>').join('')}</tr></thead><tbody>${tr}</tbody></table><p class="hint">${SQ_ON} acceso · ${SQ_OFF} spento. Pomeriggio secondo le accensioni fisse oltre la base; fascia oraria dall'inizio delle lezioni (${c.ini}) per le ${RISC().max} ore massime.</p>`;
 }
 $('#rcCal').addEventListener('click', () => { $('#rcOut').innerHTML = calFisso(); document.body.dataset.rc = 'cal'; });
 $('#rcGo').addEventListener('click', () => {
@@ -1612,7 +1612,7 @@ async function heatPdf() {
   const cw0 = 30, cwf = 44, sw = (rw - cw0 - cwf) / (cal.zs.length * 2), y0 = y + 8;
   doc.setFillColor(222, 232, 214); doc.rect(rx, y0, rw, 15, 'F');
   T('Giorno', rx + 2, y0 + 9.5, { b: 1, fs: 11 }); T('Fascia oraria', rx + rw - cwf + 2, y0 + 9.5, { b: 1, fs: 11 });
-  cal.zs.forEach((z, i) => { const zx = rx + cw0 + i * 2 * sw; T('Zona ' + z, zx + sw, y0 + 5.5, { b: 1, fs: 11, al: 'center' });
+  cal.zs.forEach((z, i) => { const zx = rx + cw0 + i * 2 * sw; dot(zx + sw - 11, y0 + 4.3, z, 1.9); T('Zona ' + z, zx + sw - 7, y0 + 5.5, { b: 1, fs: 11 });
     T('Mattino', zx + sw / 2, y0 + 12.5, { fs: 10, al: 'center' }); T('Pomeriggio', zx + sw * 1.5, y0 + 12.5, { fs: 10, al: 'center' }); });
   const sq = (cx, cy, on) => { if (on) { doc.setFillColor(211, 47, 47); doc.rect(cx - 2.6, cy - 2.6, 5.2, 5.2, 'F'); } else { doc.setDrawColor(25, 118, 210); doc.setLineWidth(0.5); doc.rect(cx - 2.4, cy - 2.4, 4.8, 4.8); } };
   let yy = y0 + 15; const rh = 8.5;
