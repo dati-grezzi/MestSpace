@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-11-10 · nome delle aree';
+const VERSION = '2026-11-10 · scheda Riscaldamento';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -1465,7 +1465,7 @@ function riscHtml(dal, al, soloVar) {
     return `<td${c.over ? ' style="background:#ffd6d6"' : dev || c.rid != null ? ' style="background:#fff2c9"' : ''}>${ivTxt(c.iv)} <small>(${+c.h.toFixed(1)} h)</small>${dev ? '<br><small>' + [...new Set(c.extra.map(i => esc(i.etichetta) + ' ' + i.dalle + '–' + i.alle + ' (' + esc((room(i.roomId) || {}).numero ?? (room(i.roomId) || {}).nome) + ')'))].join('; ') + '</small>' : ''}${c.rid != null ? '<br><small>mattina ridotta per il limite di ' + R.max + ' h</small>' : ''}${c.over ? '<br><b>oltre ' + R.max + ' h</b>' : ''}</td>`; };
   return `<table class="grid"><thead><tr><th>Giorno</th><th>Comunicare entro</th>${Object.keys(CIRC).map(z => `<th>${CIRC_L[z]}</th>`).join('')}</tr></thead><tbody>` +
     (rows.map(d => `<tr><th>${f(d.date)}</th><td>${f(avviso(d.date, R.anticipo))}</td>${Object.keys(CIRC).map(z => cell(d.z[z])).join('')}</tr>`).join('') || '<tr><td colspan="5">Nessun giorno da mostrare.</td></tr>') +
-    `</tbody></table><p class="hint">Base ${R.da}–${R.a} + accensioni fisse (Impostazioni); giallo = attività fuori dalle fasce già accese; rosso = oltre ${R.max} h di accensione al giorno (somma delle fasce).</p>`;
+    `</tbody></table><p class="hint">Base ${R.da}–${R.a} + accensioni fisse (scheda Riscaldamento); giallo = attività fuori dalle fasce già accese; rosso = oltre ${R.max} h di accensione al giorno (somma delle fasce).</p>`;
 }
 // calendario fisso (senza date): la settimana tipo = base + accensioni fisse + orario fisso delle aule
 function calFisso() {
@@ -1534,6 +1534,12 @@ $('#resetBtn').addEventListener('click', async () => {
 });
 
 /* ---------- navigazione tab ---------- */
+document.querySelectorAll('.subtabs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.subtabs button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('#tab-impostazioni .sub').forEach(s => s.hidden = s.dataset.sub !== b.dataset.sub);
+  try { localStorage.setItem('mestspace-sub', b.dataset.sub); } catch (e) { }
+}));
+try { const sb = localStorage.getItem('mestspace-sub'); const b = sb && document.querySelector(`.subtabs button[data-sub="${sb}"]`); if (b) b.click(); } catch (e) { }
 document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
   document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
   document.querySelectorAll('main > section').forEach(s => s.hidden = s.id !== 'tab-' + b.dataset.tab);

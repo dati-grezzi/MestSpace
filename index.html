@@ -33,6 +33,9 @@
   nav{position:fixed;bottom:0;left:0;right:0;max-width:760px;margin:0 auto;display:flex;background:var(--paper2);border-top:2px solid var(--ink);z-index:100}
   nav button{flex:1;border:none;border-radius:0;background:none;padding:9px 0 7px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--ink-soft);font-family:inherit}
   nav button.on{color:var(--teal)}
+  .subtabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+  .subtabs button{border-radius:999px;padding:6px 14px}
+  .subtabs button.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
   #areaNamePos.on{background:var(--ink);color:var(--paper)}
   nav .ic{width:26px;height:26px}
   nav .lb{font-size:11.5px;font-weight:700}
@@ -145,7 +148,7 @@
   @media print{
     @page{size:A3 landscape;margin:10mm}
     body{background:#fff}
-    header,nav,.bar,#conflicts,form,#tab-assegnazioni,#tab-planimetrie,#tab-impostazioni,#tab-report{display:none!important}
+    header,nav,.bar,#conflicts,form,#tab-assegnazioni,#tab-planimetrie,#tab-impostazioni,#tab-riscaldamento,#tab-report{display:none!important}
     main{padding:0;max-width:none}
     #tab-settimana{display:block!important}
     body.print-sett #tab-settimana,body.print-sett #tab-report{display:none!important}
@@ -415,23 +418,7 @@
     <canvas id="planCanvas"></canvas>
   </section>
 
-  <section id="tab-impostazioni" hidden>
-    <div class="bar">
-      <label>Classi a settimana corta (separate da virgola)
-        <input id="corta" size="30">
-      </label>
-      <button id="saveCorta">Salva</button>
-    </div>
-    <div class="bar">
-      <b>Scuola chiusa:</b>
-      <label>dal <input type="date" id="chiDal"></label>
-      <label>al <input type="date" id="chiAl"></label>
-      <label>motivo <input id="chiMot" size="22" placeholder="es. Ponte, elezioni"></label>
-      <button id="chiAdd">+ Aggiungi</button>
-      <button id="chiFest">Aggiungi festività nazionali 2026/27</button>
-    </div>
-    <div id="chiList"></div>
-    <p class="hint">In questi giorni le attività sono sospese: non compaiono in Settimana, Report e stampe e non generano conflitti. Per un solo giorno basta la data iniziale.</p>
+  <section id="tab-riscaldamento" hidden>
     <div class="bar">
       <b>Riscaldamento (zone):</b>
       <label>base dalle <input type="time" id="rcDa"></label><label>alle <input type="time" id="rcA"></label>
@@ -448,6 +435,43 @@
       <button id="rcGo">Mostra prospetto</button><button id="rcCal">Calendario fisso</button><button id="rcPrint">Stampa</button>
     </div>
     <div id="rcOut"></div>
+  </section>
+
+  <section id="tab-impostazioni" hidden>
+    <div class="subtabs">
+      <button data-sub="generale" class="on">Generale</button><button data-sub="calendario">Calendario</button><button data-sub="docenti">Docenti</button><button data-sub="aule">Aule</button>
+    </div>
+    <div class="sub" data-sub="generale">
+    <div class="bar">
+      <button id="fontBtn">Carattere: A</button>
+    </div>
+    <div class="bar">
+      <button id="exportBtn">Esporta backup (JSON)</button>
+      <label>Importa backup <input type="file" id="importFile" accept="application/json"></label>
+      <button id="resetBtn">Azzera dati</button>
+    </div>
+    <p class="hint">Versione app: <span id="ver"></span>.</p>
+    <p class="hint">I dati restano su questo dispositivo. Esporta un backup periodicamente.</p>
+    </div>
+    <div class="sub" data-sub="calendario" hidden>
+    <div class="bar">
+      <label>Classi a settimana corta (separate da virgola)
+        <input id="corta" size="30">
+      </label>
+      <button id="saveCorta">Salva</button>
+    </div>
+    <div class="bar">
+      <b>Scuola chiusa:</b>
+      <label>dal <input type="date" id="chiDal"></label>
+      <label>al <input type="date" id="chiAl"></label>
+      <label>motivo <input id="chiMot" size="22" placeholder="es. Ponte, elezioni"></label>
+      <button id="chiAdd">+ Aggiungi</button>
+      <button id="chiFest">Aggiungi festività nazionali 2026/27</button>
+    </div>
+    <div id="chiList"></div>
+    <p class="hint">In questi giorni le attività sono sospese: non compaiono in Settimana, Report e stampe e non generano conflitti. Per un solo giorno basta la data iniziale.</p>
+    </div>
+    <div class="sub" data-sub="docenti" hidden>
     <div class="bar">
       <b>Orario dei docenti:</b>
       <label>Importa (Excel) <input type="file" id="orFile" accept=".xlsx,.xls"></label>
@@ -456,9 +480,8 @@
     </div>
     <div id="docGrid"></div>
     <p class="hint">Foglio «orario»: colonna A materie, B docenti, poi 36 colonne (lun–sab × 6 ore). Una cella con la classe indica la lezione, «P» il potenziamento. Se a un'attività assegni un docente (campo «docente») che nello stesso momento ha lezione, la Settimana segnala il conflitto. Le aule mostrate sono quelle fisse delle classi.</p>
-    <div class="bar">
-      <button id="fontBtn">Carattere: A</button>
     </div>
+    <div class="sub" data-sub="aule" hidden>
     <div class="bar">
       <button id="fisseBtn">Precompila assegnazioni fisse delle classi</button>
     </div>
@@ -468,13 +491,7 @@
       <button id="roomsCsv">Esporta foglio (CSV)</button>
     </div>
     <p class="hint">Il foglio è la sorgente. Tre cose distinte: <b>numero</b> (1–27), <b>etichetta</b> (nome del locale, es. Biblioteca) e <b>attività</b> (cosa si svolge). Una riga per aula (piano, numero, etichetta, tipo, capienza, mq, note) e, in coda, una riga per ogni assegnazione, riferita al numero dell'aula: <b>attività</b> + <b>fissa</b> (nessun giorno/orario) oppure <b>temporanea</b> (giorno, dalle, alle; facoltativi dal/al per un periodo). Se il foglio contiene la colonna «assegnazione», importandolo sostituisce tutte le assegnazioni dell'app; le aule vengono aggiornate o aggiunte, mai eliminate. «Esporta» scrive anche ciò che hai inserito da app, accodato.</p>
-    <div class="bar">
-      <button id="exportBtn">Esporta backup (JSON)</button>
-      <label>Importa backup <input type="file" id="importFile" accept="application/json"></label>
-      <button id="resetBtn">Azzera dati</button>
     </div>
-    <p class="hint">Versione app: <span id="ver"></span>.</p>
-    <p class="hint">I dati restano su questo dispositivo. Esporta un backup periodicamente.</p>
   </section>
 
   <section id="tab-report" hidden>
@@ -510,9 +527,13 @@
     <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>
     <span class="lb">Report</span>
   </button>
-  <button data-tab="impostazioni" aria-label="Impost.">
+  <button data-tab="riscaldamento" aria-label="Riscald.">
+    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1 3.2 4.5 5.2 4.5 9.2A4.5 4.5 0 0 1 12 17a4.5 4.5 0 0 1-4.5-4.8c0-1.7.8-2.9 1.8-3.9.2 1.2.9 1.9 1.7 2.2C11 8.2 11 5.5 12 3z"/><path d="M8 21h8"/></svg>
+    <span class="lb">Riscald.</span>
+  </button>
+  <button data-tab="impostazioni" aria-label="Altro">
     <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
-    <span class="lb">Impost.</span>
+    <span class="lb">Altro</span>
   </button>
 </nav>
 
@@ -529,6 +550,6 @@
     <div class="aepane"><div class="aeh">Mappa aerea <button id="aeZaOut">−</button><button id="aeZaIn">+</button></div><div class="aesc"><div id="aeAw"><canvas id="aeAc"></canvas></div></div></div>
   </div>
 </div>
-<script src="app.js?v=20261110a"></script>
+<script src="app.js?v=20261110b"></script>
 </body>
 </html>
