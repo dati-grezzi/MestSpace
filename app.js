@@ -1455,7 +1455,7 @@ async function renderHeatMaps() {
 /* ---------- riscaldamento: zone e prospetto per la ditta ---------- */
 const RISC = () => {
   S.risc = S.risc || {};
-  Object.entries({ da: '06:00', a: '12:00', max: 10, pre: 0, anticipo: 2 }).forEach(([k, v]) => { if (S.risc[k] === undefined) S.risc[k] = v; });   // in place: lo stesso oggetto a ogni chiamata
+  Object.entries({ da: '06:00', a: '12:00', sab: '13:00', max: 10, pre: 0, anticipo: 2 }).forEach(([k, v]) => { if (S.risc[k] === undefined) S.risc[k] = v; });   // in place: lo stesso oggetto a ogni chiamata
   if (!S.risc.fissi) S.risc.fissi = [   // accensioni pomeridiane fisse (da confermare gli orari)
     { id: 'f1', zona: 'A', giorni: [1, 2, 3, 4, 5], dal: '13:30', al: '18:30', att: 'Musicale' },
     { id: 'f2', zona: 'A', giorni: [1, 2, 3, 4, 5], dal: '13:30', al: '18:30', att: 'Atrio e segreteria' }];
@@ -1479,7 +1479,7 @@ const hmm = m => pad(Math.floor(m / 60)) + ':' + pad(m % 60);
 const CIRC = { A: ['A'], B: ['B'], C: ['C'] };   // la richiesta alla ditta è per zona, separata: la gestione dei circuiti spetta a loro
 const CIRC_L = ZONE;
 function zoneDay(zs, g, items, date) {   // intervalli di accensione di un gruppo di zone in un giorno: base + fissi + attività fuori base
-  const R = RISC(), bs = toMin(R.da), be = toMin(R.a), fx = fissiOf(zs, g).map(f => [toMin(f.dal), toMin(f.al)]), cov = mergeIv([[bs, be], ...fx]);
+  const R = RISC(), bs = toMin(R.da), be = toMin(g === 6 ? R.sab : R.a), fx = fissiOf(zs, g).map(f => [toMin(f.dal), toMin(f.al)]), cov = mergeIv([[bs, be], ...fx]);
   const occ = !date ? [] : (RISC().occ || []).filter(o => date >= o.dal && date <= (o.al || o.dal) && o.zone.split('').some(z => zs.includes(z))).map(o => ({ dalle: o.dalle, alle: o.alle, etichetta: o.att || 'Accensione occasionale', roomId: null, occ: true }));
   const rs = [...items.filter(i => zs.includes((room(i.roomId) || {}).zona)), ...occ];
   const varr = rs.filter(i => { const a = toMin(i.dalle) - R.pre, b = toMin(i.alle); return !cov.some(c => c[0] <= a && c[1] >= b); });
@@ -1516,22 +1516,20 @@ function riscHtml(dal, al, soloVar) {
 }
 // calendario fisso (senza date): la settimana tipo = base + accensioni fisse + orario fisso delle aule
 function calFissoData() {
-  const R = RISC(), zs = Object.keys(CIRC), G = ['', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'], bs = toMin(R.da), be = toMin(R.a), ini = SCAN[0][1];
+  const R = RISC(), zs = Object.keys(CIRC), G = ['', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'], ini = SCAN[0][1], be = toMin(R.a);
   const rows = [1, 2, 3, 4, 5, 6].map(g => {
-    const it = S.std.filter(x => x.giorno === g); let fine = 0;
-    const on = zs.map(z => {
-      const c = zoneDay(CIRC[z], g, it), pm = g === 6 ? [] : c.iv.filter(x => x[1] > be || x[0] < bs);   // sabato pomeriggio sempre spento
-      if (pm.length) fine = Math.max(fine, ...pm.map(x => x[1]));
-      return !!pm.length;
-    });
-    return { g: G[g], on, fascia: ini + ' – ' + hmm(Math.max(fine, be)) };
+    const it = S.std.filter(x => x.giorno === g);
+    const pm = zs.map(z => g !== 6 && zoneDay(CIRC[z], g, it).iv.some(x => x[1] > be));   // sabato pomeriggio sempre spento
+    const fine = g === 6 ? toMin(R.sab) : pm.some(Boolean) ? toMin(ini) + R.max * 60 : be;   // fascia generica: dall'inizio delle lezioni, sfruttando le ore massime
+    return { g: G[g], am: zs.map(() => true), pm, fascia: ini + ' – ' + hmm(fine) };
   });
-  return { zs, rows, ini, nota: `Ogni settimana, salvo variazioni. Tutte le zone sono accese ogni mattina, sabato compreso (base ${R.da}-${R.a}). POMERIGGIO = accensione anche nel pomeriggio; il sabato pomeriggio è sempre spento. Fascia oraria: dall'inizio delle lezioni (${ini}) alla fine dell'accensione più tarda.` };
+  return { zs, rows, ini, nota: `Ogni settimana, salvo variazioni. Mattino: tutte le zone accese (sabato fino alle ${R.sab}). Pomeriggio: accese solo dove indicato; il sabato pomeriggio è sempre spento. Fascia oraria: dall'inizio delle lezioni (${ini}), per le ${R.max} ore massime di accensione.` };
 }
+const SQ_ON = '<span style="display:inline-block;width:12px;height:12px;background:#d32f2f"></span>', SQ_OFF = '<span style="display:inline-block;width:10px;height:10px;border:1.5px solid #1976D2"></span>';
 function calFisso() {
-  const c = calFissoData();
-  const tr = c.rows.map(r => `<tr><th>${r.g}</th>${r.on.map(o => o ? '<td style="color:#c2410c"><b>Mattino + pomeriggio</b></td>' : '<td style="color:#2e7d32">Solo mattino</td>').join('')}<td>${r.fascia}</td></tr>`).join('');
-  return `<h4 style="margin:6px 0">Calendario fisso · settimana tipo</h4><table class="grid"><thead><tr><th>Giorno</th>${c.zs.map(z => `<th>${CIRC_L[z]}</th>`).join('')}<th>Fascia oraria</th></tr></thead><tbody>${tr}</tbody></table><p class="hint">${c.nota}</p>`;
+  const c = calFissoData(), sq = o => `<td style="text-align:center">${o ? SQ_ON : SQ_OFF}</td>`;
+  const tr = c.rows.map(r => `<tr><th>${r.g}</th>${c.zs.map((z, i) => sq(r.am[i]) + sq(r.pm[i])).join('')}<td>${r.fascia}</td></tr>`).join('');
+  return `<h4 style="margin:6px 0">Calendario fisso · settimana tipo</h4><table class="grid"><thead><tr><th rowspan="2">Giorno</th>${c.zs.map(z => `<th colspan="2" style="text-align:center">${CIRC_L[z]}</th>`).join('')}<th rowspan="2">Fascia oraria</th></tr><tr>${c.zs.map(() => '<th>Mattino</th><th>Pomeriggio</th>').join('')}</tr></thead><tbody>${tr}</tbody></table><p class="hint">${SQ_ON} acceso · ${SQ_OFF} spento. ${c.nota}</p>`;
 }
 $('#rcCal').addEventListener('click', () => { $('#rcOut').innerHTML = calFisso(); document.body.dataset.rc = 'cal'; });
 $('#rcGo').addEventListener('click', () => {
@@ -1607,7 +1605,7 @@ async function heatPdf() {
   // colonna sinistra: regole + accensioni fisse
   const lw = 179;
   T('Regole di accensione', m, y + 5, { b: 1, fs: 14 });
-  T(`Base ${R.da}-${R.a} · massimo ${R.max} ore al giorno per zona.`, m, y + 11, { fs: 10.5 });
+  T(`Base ${R.da}-${R.a} (sabato fino alle ${R.sab}) · massimo ${R.max} ore al giorno per zona.`, m, y + 11, { fs: 10.5 });
   T(`Variazioni da comunicare almeno ${R.anticipo} giorni prima. Sabato pomeriggio sempre spento.`, m, y + 16, { fs: 10.5 });
   T('Accensioni fisse oltre la base', m, y + 25, { b: 1, fs: 14 });
   const fcols = [{ w: 44 }, { w: 54 }, { w: 24 }, { w: 57 }];
@@ -1616,11 +1614,24 @@ async function heatPdf() {
   // colonna destra: calendario fisso
   const cal = calFissoData(), rx = m + lw + 10, rw = W - lw - 10;
   T('Calendario fisso · settimana tipo', rx, y + 5, { b: 1, fs: 14 });
-  const cw0 = 30, cwf = 42, cwz = (rw - cw0 - cwf) / cal.zs.length;
-  const ccols = [{ w: cw0 }, ...cal.zs.map(() => ({ w: cwz })), { w: cwf }];
-  const ye = table(rx, y + 8, ccols, ['Giorno', ...cal.zs.map(z => 'Zona ' + z), 'Fascia oraria'],
-    cal.rows.map(r => ({ cells: [{ t: r.g, b: 1 }, ...r.on.map(o => ({ t: o ? 'Mattino + pomeriggio' : 'Solo mattino', b: o, c: o ? [194, 65, 12] : [46, 125, 50] })), r.fascia] })), { rh: 8.5, fs: 11 });
-  doc.setFontSize(9.5); doc.setTextColor(90); doc.text(doc.splitTextToSize(cal.nota, rw), rx, ye + 5);
+  const cw0 = 30, cwf = 44, sw = (rw - cw0 - cwf) / (cal.zs.length * 2), y0 = y + 8;
+  doc.setFillColor(222, 232, 214); doc.rect(rx, y0, rw, 15, 'F');
+  T('Giorno', rx + 2, y0 + 9.5, { b: 1, fs: 11 }); T('Fascia oraria', rx + rw - cwf + 2, y0 + 9.5, { b: 1, fs: 11 });
+  cal.zs.forEach((z, i) => { const zx = rx + cw0 + i * 2 * sw; T('Zona ' + z, zx + sw, y0 + 5.5, { b: 1, fs: 11, al: 'center' });
+    T('Mattino', zx + sw / 2, y0 + 12.5, { fs: 10, al: 'center' }); T('Pomeriggio', zx + sw * 1.5, y0 + 12.5, { fs: 10, al: 'center' }); });
+  const sq = (cx, cy, on) => { if (on) { doc.setFillColor(211, 47, 47); doc.rect(cx - 2.6, cy - 2.6, 5.2, 5.2, 'F'); } else { doc.setDrawColor(25, 118, 210); doc.setLineWidth(0.5); doc.rect(cx - 2.4, cy - 2.4, 4.8, 4.8); } };
+  let yy = y0 + 15; const rh = 8.5;
+  cal.rows.forEach(r => {
+    T(r.g, rx + 2, yy + rh - 2.4, { b: 1, fs: 11 });
+    cal.zs.forEach((z, i) => { const zx = rx + cw0 + i * 2 * sw; sq(zx + sw / 2, yy + rh / 2, r.am[i]); sq(zx + sw * 1.5, yy + rh / 2, r.pm[i]); });
+    T(r.fascia, rx + rw - cwf + 2, yy + rh - 2.4, { fs: 11 });
+    doc.setDrawColor(190); doc.setLineWidth(0.2); doc.line(rx, yy + rh, rx + rw, yy + rh); yy += rh;
+  });
+  doc.setDrawColor(210); doc.setLineWidth(0.2);   // separatori verticali tra le zone
+  cal.zs.forEach((z, i) => { const zx = rx + cw0 + i * 2 * sw; doc.line(zx, y0, zx, yy); });
+  doc.line(rx + rw - cwf, y0, rx + rw - cwf, yy);
+  const ly = yy + 6; sq(rx + 3, ly - 1.2, true); T('acceso', rx + 7, ly, { fs: 10.5 }); sq(rx + 28, ly - 1.2, false); T('spento', rx + 32, ly, { fs: 10.5 });
+  doc.setFontSize(9.5); doc.setTextColor(90); doc.text(doc.splitTextToSize(cal.nota, rw), rx, ly + 6);
   foot(1);
   /* ---- pagina 2: solo occasionali, se ce ne sono ---- */
   const occ = (R.occ || []).filter(x => (x.al || x.dal) >= today).sort((p, q) => (p.dal + p.dalle).localeCompare(q.dal + q.dalle));
