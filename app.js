@@ -1455,7 +1455,8 @@ async function renderHeatMaps() {
 /* ---------- riscaldamento: zone e prospetto per la ditta ---------- */
 const RISC = () => {
   S.risc = S.risc || {};
-  Object.entries({ da: '06:00', a: '12:00', sab: '13:00', max: 10, pre: 0, anticipo: 2 }).forEach(([k, v]) => { if (S.risc[k] === undefined) S.risc[k] = v; });   // in place: lo stesso oggetto a ogni chiamata
+  Object.entries({ da: '07:00', a: '13:00', sab: '13:00', max: 10, pre: 0, anticipo: 2 }).forEach(([k, v]) => { if (S.risc[k] === undefined) S.risc[k] = v; });   // in place: lo stesso oggetto a ogni chiamata
+  if (S.risc.da === '06:00' && S.risc.a === '12:00') { S.risc.da = '07:00'; S.risc.a = '13:00'; }   // base del mattino aggiornata a 7-13
   if (!S.risc.fissi) S.risc.fissi = [   // accensioni pomeridiane fisse (da confermare gli orari)
     { id: 'f1', zona: 'A', giorni: [1, 2, 3, 4, 5], dal: '13:30', al: '18:30', att: 'Musicale' },
     { id: 'f2', zona: 'A', giorni: [1, 2, 3, 4, 5], dal: '13:30', al: '18:30', att: 'Atrio e segreteria' }];
@@ -1473,7 +1474,7 @@ function renderZone() {
 }
 $('#rcRooms').addEventListener('change', e => { const s = e.target.closest('select[data-zr]'); if (!s) return; const r = room(s.dataset.zr); if (r) { r.zona = s.value; save(); renderHeatMaps(); } });
 ['rcDa', 'rcA', 'rcMax', 'rcPre', 'rcAnt'].forEach(id => $('#' + id).addEventListener('change', () => {
-  const R = RISC(); R.da = $('#rcDa').value || '06:00'; R.a = $('#rcA').value || '12:00'; R.max = +$('#rcMax').value || 10; R.pre = +$('#rcPre').value || 0; R.anticipo = +$('#rcAnt').value || 0; save();
+  const R = RISC(); R.da = $('#rcDa').value || '07:00'; R.a = $('#rcA').value || '13:00'; R.max = +$('#rcMax').value || 10; R.pre = +$('#rcPre').value || 0; R.anticipo = +$('#rcAnt').value || 0; save();
 }));
 const hmm = m => pad(Math.floor(m / 60)) + ':' + pad(m % 60);
 const CIRC = { A: ['A'], B: ['B'], C: ['C'] };   // la richiesta alla ditta è per zona, separata: la gestione dei circuiti spetta a loro
