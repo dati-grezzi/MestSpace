@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-11-10 · piante zonate nel riscaldamento';
+const VERSION = '2026-11-10 · occasionali da piano attività';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -1556,9 +1556,10 @@ $('#rcFissi').addEventListener('change', e => {
 });
 $('#rcFissi').addEventListener('click', e => { const b = e.target.closest('button[data-del]'); if (!b) return; RISC().fissi = RISC().fissi.filter(x => x.id !== b.dataset.del); save(); renderFissi(); });
 $('#rcFissoAdd').addEventListener('click', () => { RISC().fissi.push({ id: uid(), zona: 'A', giorni: [1, 2, 3, 4, 5], dal: '13:30', al: '18:30', att: '' }); save(); renderFissi(); });
+const OCC_2627 = [{"dal": "2026-11-11", "al": "", "dalle": "16:45", "alle": "18:45", "zone": "A", "att": "Infanzia · consiglio di inter-plesso"}, {"dal": "2026-11-18", "al": "2026-11-20", "dalle": "16:45", "alle": "18:45", "zone": "A", "att": "Primaria · consiglio di classe"}, {"dal": "2026-11-23", "al": "", "dalle": "15:00", "alle": "19:00", "zone": "ABC", "att": "Open day (orario da confermare)"}, {"dal": "2026-11-23", "al": "", "dalle": "16:45", "alle": "18:45", "zone": "A", "att": "Primaria · consiglio di classe"}, {"dal": "2026-11-25", "al": "", "dalle": "16:45", "alle": "18:45", "zone": "A", "att": "Infanzia · consiglio di intersezione"}, {"dal": "2026-12-02", "al": "2026-12-04", "dalle": "15:00", "alle": "19:00", "zone": "BC", "att": "Secondaria · consigli di classe"}, {"dal": "2026-12-09", "al": "2026-12-11", "dalle": "15:00", "alle": "19:00", "zone": "ABC", "att": "Secondaria · colloqui con le famiglie (orario da definire)"}, {"dal": "2026-12-09", "al": "", "dalle": "16:45", "alle": "18:45", "zone": "A", "att": "Infanzia · consiglio di plesso"}, {"dal": "2026-12-16", "al": "", "dalle": "15:00", "alle": "19:00", "zone": "BC", "att": "Secondaria · consigli di classe"}, {"dal": "2027-01-12", "al": "", "dalle": "16:45", "alle": "18:45", "zone": "A", "att": "Infanzia · consiglio di inter-plesso"}, {"dal": "2027-02-03", "al": "2027-02-05", "dalle": "14:00", "alle": "20:00", "zone": "A", "att": "Secondaria · scrutini"}, {"dal": "2027-02-10", "al": "2027-02-12", "dalle": "16:30", "alle": "20:00", "zone": "A", "att": "Primaria · scrutini"}, {"dal": "2027-02-15", "al": "", "dalle": "16:45", "alle": "18:45", "zone": "A", "att": "Dipartimenti verticali"}, {"dal": "2027-02-17", "al": "2027-02-19", "dalle": "16:30", "alle": "20:00", "zone": "A", "att": "Primaria · scrutini"}, {"dal": "2027-02-24", "al": "", "dalle": "16:45", "alle": "18:45", "zone": "A", "att": "Primaria · consigli di classe per progetti"}, {"dal": "2027-03-15", "al": "", "dalle": "17:00", "alle": "19:00", "zone": "A", "att": "Collegio docenti unitario"}, {"dal": "2027-03-16", "al": "", "dalle": "15:00", "alle": "19:00", "zone": "BC", "att": "Secondaria · consigli di classe"}, {"dal": "2027-03-17", "al": "", "dalle": "16:45", "alle": "18:45", "zone": "A", "att": "Infanzia · consiglio di plesso"}, {"dal": "2027-03-18", "al": "2027-03-19", "dalle": "15:00", "alle": "19:00", "zone": "BC", "att": "Secondaria · consigli di classe"}, {"dal": "2027-03-18", "al": "2027-03-19", "dalle": "16:45", "alle": "18:45", "zone": "A", "att": "Primaria · consiglio di classe"}, {"dal": "2027-03-22", "al": "", "dalle": "16:45", "alle": "18:45", "zone": "A", "att": "Primaria · consiglio di classe"}, {"dal": "2027-03-23", "al": "", "dalle": "16:45", "alle": "18:45", "zone": "A", "att": "Infanzia · consiglio di intersezione"}];   // dal «Calendario attività funzionali 2026/27» (Allegato 3): eventi nel plesso Mestica durante la stagione di riscaldamento (fino al 15/04); zone da verificare
 function renderOcc() {
   const R = RISC(); R.occ = R.occ || [];
-  const Z = [['A', 'A'], ['B', 'B'], ['C', 'C'], ['ABC', 'Tutte']];
+  const Z = [['A', 'A'], ['B', 'B'], ['C', 'C'], ['AB', 'A+B'], ['AC', 'A+C'], ['BC', 'B+C'], ['ABC', 'Tutte']];
   $('#rcOccL').innerHTML = R.occ.map(o => `<div class="chi" data-o="${o.id}"><select data-k="zone">${Z.map(([v, t]) => `<option value="${v}"${o.zone === v ? ' selected' : ''}>${t}</option>`).join('')}</select> ` +
     `dal <input type="date" data-k="dal" value="${o.dal || ''}"> al <input type="date" data-k="al" value="${o.al || ''}" title="vuoto = solo il giorno iniziale"> ` +
     `<input type="time" data-k="dalle" value="${o.dalle}"> – <input type="time" data-k="alle" value="${o.alle}"> <input data-k="att" value="${esc(o.att || '')}" size="18" placeholder="motivo"> <button data-del="${o.id}">✕</button></div>`).join('');
@@ -1568,6 +1569,12 @@ $('#rcOccL').addEventListener('change', e => {
   o[e.target.dataset.k] = e.target.value; if (o.al && o.al < o.dal) o.al = o.dal; save(); renderOcc();
 });
 $('#rcOccL').addEventListener('click', e => { const b = e.target.closest('button[data-del]'); if (!b) return; RISC().occ = RISC().occ.filter(x => x.id !== b.dataset.del); save(); renderOcc(); });
+$('#rcOccImp').addEventListener('click', async () => {
+  const R = RISC(); R.occ = R.occ || []; let n = 0;
+  OCC_2627.forEach(o => { if (!R.occ.some(x => x.dal === o.dal && x.dalle === o.dalle && x.alle === o.alle && x.att === o.att)) { R.occ.push({ id: uid(), ...o }); n++; } });
+  R.occ.sort((p, q) => (p.dal + p.dalle).localeCompare(q.dal + q.dalle)); save(); renderOcc();
+  await uiAlert(n ? `Aggiunte ${n} accensioni occasionali dal Calendario attività 2026/27. Controlla le zone.` : 'Sono già tutte presenti.');
+});
 $('#rcOccAdd').addEventListener('click', () => { const R = RISC(); R.occ = R.occ || []; R.occ.push({ id: uid(), zone: 'ABC', dal: iso(new Date()), al: '', dalle: '08:00', alle: '13:00', att: '' }); save(); renderOcc(); });
 renderZone(); renderFissi(); renderOcc();
 $('#exportBtn').addEventListener('click', () => {
