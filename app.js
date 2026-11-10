@@ -1549,17 +1549,15 @@ async function heatPrintHtml() {
   const zl = z => z.split('').map(k => `<b style="color:${ZCOL[k]}">${k}</b>`).join('+');
   const occT = '<table class="grid pr"><thead><tr><th>Quando</th><th>Zone</th><th>Orario</th><th>Motivo</th></tr></thead><tbody>' +
     (occ.map(x => `<tr><td>${dShort(x.dal)}${x.al && x.al !== x.dal ? ' → ' + dShort(x.al) : ''}</td><td>${zl(x.zone)}</td><td>${x.dalle}–${x.alle}</td><td>${esc(x.att || '')}</td></tr>`).join('') || '<tr><td colspan="4">Nessuna accensione occasionale in programma.</td></tr>') + '</tbody></table>';
-  const dal = $('#rcDal').value, al = $('#rcAl').value, haveRange = dal && al && al >= dal;
   const hdr = o.hdr ? `<img class="phdr" src="${await headerImage('IC VIA TACITO - PLESSO ENRICO MESTICA - RISCALDAMENTO', 400, 18)}">` : '';
-  const foot = pn => (o.ms || o.dg || o.info) ? '<div class="pfoot"><div class="l">' + (o.ms ? `<img src="${LOGO_MS.src}"><span>Gestione locali Mestica</span>` : '') + '</div>' +
-    `<div>${o.info ? `Scuola secondaria Mestica · Riscaldamento · stampa del ${fmt(today)} · pag. ${pn}` : ''}</div><div class="r">` + (o.dg ? `<span>powered by</span><img src="${LOGO_DG.src}">` : '') + '</div></div>' : '';
+  const foot = pn => '<div class="pfoot"><div class="l"><img src="' + LOGO_MS.src + '"><span>Gestione locali Mestica</span></div>' +
+    `<div>Scuola secondaria Mestica · Riscaldamento · stampa del ${fmt(today)} · pag. ${pn}</div><div class="r"></div></div>`;   // solo il logo MestSpace
   const leg = '<div class="heatleg">' + ['A', 'B', 'C'].map(z => `<span>${zt(z)}</span>`).join('') + '<span><span class="zsw" style="background:#8a8a8a"></span>senza zona</span></div>';
   const warn = $('#heatWarn').innerText.trim();
   const p1 = `<div class="pa pa-risc">${hdr}<div class="maps"><figure><figcaption>Piano terra</figcaption><img src="${cap($('#heatT'))}"></figure><figure><figcaption>Primo piano</figcaption><img src="${cap($('#heatP'))}"></figure></div>${leg}${warn ? `<p class="hint">${esc(warn)}</p>` : ''}` +
     `<div class="cols"><div><h3>Regole di accensione</h3><p class="psub">Base ${R.da}–${R.a} · massimo ${R.max} ore al giorno per zona · variazioni da comunicare almeno ${R.anticipo} giorni prima. Sabato pomeriggio sempre spento.</p><h3>Accensioni fisse oltre la base</h3>${fissi}</div><div>${calFisso()}</div></div>${foot(1)}</div>`;
-  const p2 = `<div class="pa pa-risc">${hdr}<div class="cols2"><div><h3>Accensioni occasionali in programma</h3>${occT}</div>` +
-    `<div><h3>Programma per date${haveRange ? ` · ${fmt(dal)} – ${fmt(al)}` : ''}</h3>${haveRange ? riscHtml(dal, al, $('#rcVar').checked) : '<p class="hint">Imposta «dal» e «al» nella scheda per includere il programma giorno per giorno.</p>'}</div></div>${foot(2)}</div>`;
-  return p1 + (occ.length || haveRange ? p2 : '');
+  const p2 = `<div class="pa pa-risc">${hdr}<div class="occ1"><h3>Accensioni occasionali in programma</h3>${occT}</div>${foot(2)}</div>`;
+  return p1 + (occ.length ? p2 : '');
 }
 $('#rcPrint').addEventListener('click', async () => {
   $('#printArea').innerHTML = await heatPrintHtml();
