@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-11-10 · PDF riscaldamento: giorni a caselle, sabato mattina';
+const VERSION = '2026-11-10 · prospetto riscaldamento da accensioni fisse';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -1515,21 +1515,20 @@ function riscHtml(dal, al, soloVar) {
     `</tbody></table><p class="hint">Base ${R.da}–${R.a} + accensioni fisse (scheda Riscaldamento); giallo = attività fuori dalle fasce già accese; rosso = oltre ${R.max} h di accensione al giorno (somma delle fasce).</p>`;
 }
 // calendario fisso (senza date): la settimana tipo = base + accensioni fisse + orario fisso delle aule
-function calFissoData() {
+function calFissoData() {   // il pomeriggio segue solo la tabella «accensioni fisse oltre la base»
   const R = RISC(), zs = Object.keys(CIRC), G = ['', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'], ini = SCAN[0][1], be = toMin(R.a);
   const rows = [1, 2, 3, 4, 5, 6].map(g => {
-    const it = S.std.filter(x => x.giorno === g);
-    const pm = zs.map(z => g !== 6 && zoneDay(CIRC[z], g, it).iv.some(x => x[1] > be));   // sabato pomeriggio sempre spento
-    const fine = g === 6 ? toMin(R.sab) : pm.some(Boolean) ? toMin(ini) + R.max * 60 : be;   // fascia generica: dall'inizio delle lezioni, sfruttando le ore massime
+    const pm = zs.map(z => R.fissi.some(f => CIRC[z].includes(f.zona) && f.giorni.includes(g)));
+    const fine = pm.some(Boolean) ? toMin(ini) + R.max * 60 : g === 6 ? toMin(R.sab) : be;   // fascia generica: dall'inizio delle lezioni, per le ore massime
     return { g: G[g], am: zs.map(() => true), pm, fascia: ini + ' – ' + hmm(fine) };
   });
-  return { zs, rows, ini, nota: `Ogni settimana, salvo variazioni. Mattino: tutte le zone accese (sabato fino alle ${R.sab}). Pomeriggio: accese solo dove indicato; il sabato pomeriggio è sempre spento. Fascia oraria: dall'inizio delle lezioni (${ini}), per le ${R.max} ore massime di accensione.` };
+  return { zs, rows, ini, nota: '' };
 }
 const SQ_ON = '<span style="display:inline-block;width:12px;height:12px;background:#d32f2f"></span>', SQ_OFF = '<span style="display:inline-block;width:10px;height:10px;border:1.5px solid #1976D2"></span>';
 function calFisso() {
   const c = calFissoData(), sq = o => `<td style="text-align:center">${o ? SQ_ON : SQ_OFF}</td>`;
   const tr = c.rows.map(r => `<tr><th>${r.g}</th>${c.zs.map((z, i) => sq(r.am[i]) + sq(r.pm[i])).join('')}<td>${r.fascia}</td></tr>`).join('');
-  return `<h4 style="margin:6px 0">Calendario fisso · settimana tipo</h4><table class="grid"><thead><tr><th rowspan="2">Giorno</th>${c.zs.map(z => `<th colspan="2" style="text-align:center">${CIRC_L[z]}</th>`).join('')}<th rowspan="2">Fascia oraria</th></tr><tr>${c.zs.map(() => '<th>Mattino</th><th>Pomeriggio</th>').join('')}</tr></thead><tbody>${tr}</tbody></table><p class="hint">${SQ_ON} acceso · ${SQ_OFF} spento. ${c.nota}</p>`;
+  return `<h4 style="margin:6px 0">Prospetto</h4><table class="grid"><thead><tr><th rowspan="2">Giorno</th>${c.zs.map(z => `<th colspan="2" style="text-align:center">${CIRC_L[z]}</th>`).join('')}<th rowspan="2">Fascia oraria</th></tr><tr>${c.zs.map(() => '<th>Mattino</th><th>Pomeriggio</th>').join('')}</tr></thead><tbody>${tr}</tbody></table><p class="hint">${SQ_ON} acceso · ${SQ_OFF} spento. Pomeriggio secondo le accensioni fisse oltre la base; fascia oraria dall'inizio delle lezioni (${c.ini}) per le ${RISC().max} ore massime.</p>`;
 }
 $('#rcCal').addEventListener('click', () => { $('#rcOut').innerHTML = calFisso(); document.body.dataset.rc = 'cal'; });
 $('#rcGo').addEventListener('click', () => {
@@ -1603,17 +1602,13 @@ async function heatPdf() {
   if (warn) { T(warn, m, y + 3, { fs: 10, c: [150, 60, 20] }); y += 6; }
   y += 4;
   // colonna sinistra: regole + accensioni fisse
-  const lw = 179;
+  const lw = 125;
   T('Regole di accensione', m, y + 5, { b: 1, fs: 14 });
-  T(`Base ${R.da}-${R.a} (sabato fino alle ${R.sab}) · massimo ${R.max} ore al giorno per zona.`, m, y + 11, { fs: 10.5 });
-  T(`Variazioni da comunicare almeno ${R.anticipo} giorni prima. Sabato pomeriggio sempre spento.`, m, y + 16, { fs: 10.5 });
-  T('Accensioni fisse oltre la base', m, y + 25, { b: 1, fs: 14 });
-  const fcols = [{ w: 44 }, { w: 54 }, { w: 24 }, { w: 57 }];
-  table(m, y + 28, fcols, ['Zona', 'Giorni', 'Orario', 'Attività'],
-    R.fissi.map(f => ({ cells: [{ t: ZONE[f.zona].split(' · ')[0] + ' · ' + ZONE[f.zona].split(' · ')[1].split(' (')[0], zone: f.zona }, { days: f.giorni }, `${f.dal}-${f.al}`, f.att] })), { fs: 10.5 });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(30);
+  doc.text(doc.splitTextToSize(`Base ${R.da}-${R.a} (sabato fino alle ${R.sab}) · massimo ${R.max} ore al giorno per zona. Variazioni da comunicare almeno ${R.anticipo} giorni prima.`, lw), m, y + 12);
   // colonna destra: calendario fisso
   const cal = calFissoData(), rx = m + lw + 10, rw = W - lw - 10;
-  T('Calendario fisso · settimana tipo', rx, y + 5, { b: 1, fs: 14 });
+  T('Prospetto', rx, y + 5, { b: 1, fs: 14 });
   const cw0 = 30, cwf = 44, sw = (rw - cw0 - cwf) / (cal.zs.length * 2), y0 = y + 8;
   doc.setFillColor(222, 232, 214); doc.rect(rx, y0, rw, 15, 'F');
   T('Giorno', rx + 2, y0 + 9.5, { b: 1, fs: 11 }); T('Fascia oraria', rx + rw - cwf + 2, y0 + 9.5, { b: 1, fs: 11 });
@@ -1631,7 +1626,6 @@ async function heatPdf() {
   cal.zs.forEach((z, i) => { const zx = rx + cw0 + i * 2 * sw; doc.line(zx, y0, zx, yy); });
   doc.line(rx + rw - cwf, y0, rx + rw - cwf, yy);
   const ly = yy + 6; sq(rx + 3, ly - 1.2, true); T('acceso', rx + 7, ly, { fs: 10.5 }); sq(rx + 28, ly - 1.2, false); T('spento', rx + 32, ly, { fs: 10.5 });
-  doc.setFontSize(9.5); doc.setTextColor(90); doc.text(doc.splitTextToSize(cal.nota, rw), rx, ly + 6);
   foot(1);
   /* ---- pagina 2: solo occasionali, se ce ne sono ---- */
   const occ = (R.occ || []).filter(x => (x.al || x.dal) >= today).sort((p, q) => (p.dal + p.dalle).localeCompare(q.dal + q.dalle));
