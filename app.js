@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-11-06 · chiusura aree, etichette protette';
+const VERSION = '2026-11-10 · nome delle aree';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -452,7 +452,7 @@ const vertexAt = (p, pt) => {   // vertice del percorso o dell'area selezionati 
   return null;
 };
 /* ---------- aree: poligoni colorati con opacità e motivo ---------- */
-let drawingArea = null, selArea = null, areaCursor = null, areaRaf = 0;
+let drawingArea = null, selArea = null, areaCursor = null, areaRaf = 0, placingName = false;
 const areasOf = p => (p.areas = p.areas || []);
 const PATS = { pieno: 'Pieno', diag: 'Righe oblique /', diag2: 'Righe oblique \\', oriz: 'Righe orizzontali', vert: 'Righe verticali', quadri: 'Quadretti', croce: 'Reticolo obliquo', punti: 'Puntini' };
 function areaFill(ar, W) {   // riempimento (colore pieno o motivo) per l'area
@@ -482,7 +482,7 @@ function drawAreas(p, W, H) {
       ctx.stroke(); ctx.setLineDash([]);
     }
     if (ar.showName && ar.name && pts.length >= 3) {
-      const cx = pts.reduce((s, q) => s + q[0], 0) / pts.length, cy = pts.reduce((s, q) => s + q[1], 0) / pts.length, fs = Math.max(12, W / 70);
+      const cx = ar.np ? ar.np.x * W : pts.reduce((s, q) => s + q[0], 0) / pts.length, cy = ar.np ? ar.np.y * H : pts.reduce((s, q) => s + q[1], 0) / pts.length, fs = Math.max(12, W / 70) * (ar.fs || 1);
       ctx.font = `bold ${fs}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.lineWidth = fs / 4; ctx.strokeStyle = '#fff'; ctx.strokeText(ar.name, cx, cy); ctx.fillStyle = '#111'; ctx.fillText(ar.name, cx, cy);
     }
@@ -666,6 +666,12 @@ canvas.addEventListener('pointerdown', async e => {
   if (drawingPath) {   // costruzione di un percorso: ogni tocco aggiunge un punto
     drawingPath.pts.push({ x: p.x / canvas.width, y: p.y / canvas.height });
     drawPlan(); $('#pathInfo').textContent = `Punti: ${drawingPath.pts.length}. Tocca per aggiungerne, poi «Fine».`;
+    e.preventDefault(); return;
+  }
+  if (placingName) {   // posizionamento del nome dell'area selezionata
+    placingName = false; $('#areaNamePos').classList.remove('on');
+    const ar = areasOf(S.plans[piano]).find(x => x.id === selArea);
+    if (ar && !groupOf(S.plans[piano], ar).lock) { ar.np = { x: p.x / canvas.width, y: p.y / canvas.height }; ar.showName = true; save(); drawPlan(); refreshAreas(); }
     e.preventDefault(); return;
   }
   if (drawingArea) {   // costruzione di un'area: ogni tocco aggiunge un vertice; il clic sul primo la chiude
@@ -1133,7 +1139,7 @@ function refreshAreas() {
   if (!L.some(x => x.id === selArea)) selArea = L.length ? L[L.length - 1].id : null;
   $('#areaSel').value = selArea || '';
   const ar = L.find(x => x.id === selArea);
-  if (ar) { $('#areaColor').value = ar.color || '#1976D2'; $('#areaOp').value = Math.round((ar.op ?? 0.35) * 100); $('#areaPat').value = ar.pat || 'pieno'; $('#areaPw').value = ar.pw || 1; $('#areaLine').checked = ar.line !== false; $('#areaName').checked = !!ar.showName; $('#areaOpV').textContent = Math.round((ar.op ?? 0.35) * 100) + '%'; }
+  if (ar) { $('#areaColor').value = ar.color || '#1976D2'; $('#areaOp').value = Math.round((ar.op ?? 0.35) * 100); $('#areaPat').value = ar.pat || 'pieno'; $('#areaPw').value = ar.pw || 1; $('#areaFs').value = ar.fs || 1; $('#areaLine').checked = ar.line !== false; $('#areaName').checked = !!ar.showName; $('#areaOpV').textContent = Math.round((ar.op ?? 0.35) * 100) + '%'; }
   const dr = !!drawingArea;
   ['areaEnd', 'areaUndo', 'areaCancel'].forEach(i => { $('#' + i).hidden = !dr; });
   ['areaNew', 'areaRen', 'areaDel', 'areaSel'].forEach(i => { $('#' + i).disabled = dr; });
@@ -1169,13 +1175,23 @@ $('#areaEnd').addEventListener('click', finishArea);
 $('#areaCancel').addEventListener('click', cancelArea);
 $('#areaUndo').addEventListener('click', () => { if (drawingArea) { drawingArea.pts.pop(); drawPlan(); $('#areaInfo').textContent = `Vertici: ${drawingArea.pts.length}.`; } });
 canvas.addEventListener('dblclick', () => { if (drawingArea) { drawingArea.pts.pop(); finishArea(); } });
-$('#areaSel').addEventListener('change', () => { selArea = $('#areaSel').value || null; refreshAreas(); drawPlan(); });
+$('#areaSel').addEventListener('change', () => { placingName = false; $('#areaNamePos').classList.remove('on'); selArea = $('#areaSel').value || null; refreshAreas(); drawPlan(); });
 $('#areaColor').addEventListener('input', () => areaEdit(a => { a.color = $('#areaColor').value; }));
 $('#areaOp').addEventListener('input', () => areaEdit(a => { a.op = $('#areaOp').value / 100; }));
 $('#areaPat').addEventListener('change', () => areaEdit(a => { a.pat = $('#areaPat').value; }));
 $('#areaPw').addEventListener('input', () => areaEdit(a => { a.pw = parseFloat($('#areaPw').value); }));
 $('#areaLine').addEventListener('change', () => areaEdit(a => { a.line = $('#areaLine').checked; }));
 $('#areaName').addEventListener('change', () => areaEdit(a => { a.showName = $('#areaName').checked; }));
+$('#areaNamePos').addEventListener('click', async () => {
+  const p = curPlan(), ar = areasOf(p).find(x => x.id === selArea);
+  if (!ar) { await uiAlert('Seleziona o crea prima un\'area.'); return; }
+  if (groupOf(p, ar).lock) { await lockedMsg(groupOf(p, ar)); return; }
+  placingName = !placingName; $('#areaNamePos').classList.toggle('on', placingName);
+  $('#areaInfo').textContent = placingName ? 'Tocca la pianta nel punto in cui vuoi il nome dell\'area.' : '';
+  if (!placingName) refreshAreas();
+});
+$('#areaNameReset').addEventListener('click', () => areaEdit(a => { delete a.np; a.fs = 1; $('#areaFs').value = 1; }));
+$('#areaFs').addEventListener('input', () => areaEdit(a => { a.fs = parseFloat($('#areaFs').value); }));
 $('#areaRen').addEventListener('click', async () => {
   const ar = areasOf(curPlan()).find(x => x.id === selArea); if (!ar) return;
   const n = await uiPrompt('Nuovo nome dell\'area:', ar.name); if (!n || !n.trim()) return;
