@@ -2,7 +2,7 @@
 
 /* ---------- utilità ---------- */
 const STORE = 'mestspace-v1';
-const VERSION = '2026-11-10 · prospetto riscaldamento da accensioni fisse';
+const VERSION = '2026-11-23 · backup automatico giornaliero su Drive';
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -1712,6 +1712,56 @@ $('#resetBtn').addEventListener('click', async () => {
   if (!await uiConfirm('Cancellare tutte le assegnazioni e le posizioni sulle planimetrie?')) return;
   S = fresh(); save(); fillRoomSelects(); fillMapRooms(); refreshGroups(); refreshPaths(); syncPdfOpts(); $('#corta').value = S.corta.join(', '); renderChiusure(); renderAll();
 });
+
+/* ---------- backup automatico su Drive (2026-11-23) ----------
+   Una volta al giorno, all'apertura, manda S allo script "Backup app" (sincronizzazione di SOStituto,
+   azione backupApp). Indirizzo, chiave e nome del dispositivo stanno in una chiave localStorage a parte:
+   non finiscono né nei backup né nel repository pubblico. */
+const BK_KEY = 'mestspace-backup';
+const BK_OGNI_ORE = 20;
+const bkCfg = () => { try { return JSON.parse(localStorage.getItem(BK_KEY)) || {}; } catch (e) { return {}; } };
+const bkSave = c => { try { localStorage.setItem(BK_KEY, JSON.stringify(c)); } catch (e) { } };
+const bkDispDefault = () => /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) ? 'telefono' : 'PC';
+function bkMostra() {
+  const c = bkCfg(), el = $('#bkStato');
+  if (!el) return;
+  const quando = t => new Date(t).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  el.classList.toggle('err', !!c.errore);
+  el.textContent = !c.url || !c.chiave ? 'Backup automatico non attivo: inserisci indirizzo e chiave.'
+    : c.errore ? `Ultimo tentativo non riuscito (${quando(c.tentativo)}): ${c.errore}`
+    : c.ultimo ? `Ultimo backup: ${quando(c.ultimo)}${c.esito === 'invariato' ? ' (dati invariati, nessuna nuova copia)' : ''}.`
+    : 'Backup automatico attivo: il primo partirà alla prossima apertura.';
+}
+async function bkInvia(manuale) {
+  const c = bkCfg();
+  if (!c.url || !c.chiave) { if (manuale) await uiAlert('Inserisci prima indirizzo e chiave, poi premi Salva.'); return; }
+  c.tentativo = Date.now(); bkSave(c);
+  try {
+    const r = await fetch(c.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ azione: 'backupApp', app: 'MestSpace', chiave: c.chiave, dispositivo: c.dispositivo || bkDispDefault(), dati: S }) });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.errore || 'risposta non valida');
+    Object.assign(c, { ultimo: Date.now(), esito: /invariato/.test(j.esito || '') ? 'invariato' : 'salvato', errore: '' });
+  } catch (err) {
+    c.errore = String(err && err.message || err);
+  }
+  bkSave(c); bkMostra();
+  if (manuale) await uiAlert(c.errore ? 'Backup non riuscito: ' + c.errore : 'Backup salvato su Drive.');
+}
+(() => {
+  const c = bkCfg();
+  $('#bkUrl').value = c.url || ''; $('#bkChiave').value = c.chiave || ''; $('#bkDisp').value = c.dispositivo || bkDispDefault();
+  $('#bkSalva').addEventListener('click', async () => {
+    const n = bkCfg();
+    n.url = $('#bkUrl').value.trim(); n.chiave = $('#bkChiave').value.trim(); n.dispositivo = $('#bkDisp').value.trim() || bkDispDefault();
+    if (n.url && !/^https:\/\/script\.google\.com\/.+\/exec$/.test(n.url)) { await uiAlert("L'indirizzo deve essere quello dello script, che finisce con /exec."); return; }
+    n.errore = ''; bkSave(n); bkMostra();
+  });
+  $('#bkOra').addEventListener('click', () => bkInvia(true));
+  bkMostra();
+  // automatico: una volta al giorno, qualche secondo dopo l'apertura
+  if (c.url && c.chiave && (!c.ultimo || Date.now() - c.ultimo > BK_OGNI_ORE * 3600e3)) setTimeout(() => bkInvia(false), 4000);
+})();
 
 /* ---------- navigazione tab ---------- */
 document.querySelectorAll('.subtabs button').forEach(b => b.addEventListener('click', () => {

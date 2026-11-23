@@ -106,6 +106,10 @@
   #pdfBar label:has(#pdfHdrText){flex:1 1 100%;display:flex;flex-direction:column;gap:2px}
   #quickBar{position:sticky;top:0;z-index:5;background:var(--paper);padding:6px 0;border-bottom:1px solid var(--rule-soft)}
   .hint{color:var(--ink-soft);font-size:13px}
+  .bkgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:12px}
+  .bkgrid label{display:flex;flex-direction:column;gap:4px}
+  .bkbox .hint,.bkbox label{color:#55675C}   /* 5,3:1 sullo sfondo: il grigio standard (4,1:1) non basta per il testo piccolo */
+  .bkbox #bkStato.err{color:var(--tx-red-dark)}
   #grid,#listAss,#reportBody{overflow-x:auto}
   #listAss table.grid td,#reportBody table.grid td{min-width:0}
   #listAss table.grid th,#listAss table.grid td{white-space:nowrap}
@@ -467,6 +471,20 @@
     </div>
     <p class="hint">Versione app: <span id="ver"></span>.</p>
     <p class="hint">I dati restano su questo dispositivo. Esporta un backup periodicamente.</p>
+    <div class="bkbox">
+    <h3>Backup automatico su Drive</h3>
+    <p class="hint">Una volta al giorno, all'apertura, l'app manda una copia dei dati alla cartella Drive «Backup app/MestSpace». Si tengono le ultime 14 copie per ogni dispositivo. Indirizzo e chiave restano solo su questo dispositivo.</p>
+    <div class="bkgrid">
+      <label>Indirizzo dello script <input id="bkUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></label>
+      <label>Chiave di backup <input id="bkChiave" type="password" autocomplete="off"></label>
+      <label>Nome di questo dispositivo <input id="bkDisp" type="text" maxlength="30" placeholder="es. PC, telefono"></label>
+    </div>
+    <div class="bar">
+      <button id="bkSalva">Salva</button>
+      <button id="bkOra" class="primary">Fai backup ora</button>
+    </div>
+    <p class="hint" id="bkStato"></p>
+    </div>
     </div>
     <div class="sub" data-sub="calendario" hidden>
     <div class="bar">
@@ -565,6 +583,6 @@
     <div class="aepane"><div class="aeh">Mappa aerea <button id="aeZaOut">−</button><button id="aeZaIn">+</button></div><div class="aesc"><div id="aeAw"><canvas id="aeAc"></canvas></div></div></div>
   </div>
 </div>
-<script src="app.js?v=20261110o"></script>
+<script src="app.js?v=20261123b"></script>
 </body>
 </html>
