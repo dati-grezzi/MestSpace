@@ -157,7 +157,7 @@ function load() {
 }
 let S = load();
 let weekDate = iso(new Date());
-const save = () => localStorage.setItem(STORE, JSON.stringify(S));
+const save = () => { localStorage.setItem(STORE, JSON.stringify(S)); if (window.bkPronto) bkProgramma(); };   // ogni modifica va anche su Drive (backup)
 const room = id => S.rooms.find(r => r.id === id);
 const roomName = id => { const r = room(id); if (!r) return '?'; return r.nome + (r.numero != null ? ` (aula ${r.numero})` : ''); };
 const rNum = id => room(id)?.numero ?? '';
@@ -1714,14 +1714,19 @@ $('#resetBtn').addEventListener('click', async () => {
 });
 
 /* ---------- backup automatico su Drive (2026-11-23) ----------
-   Una volta al giorno, all'apertura, manda S allo script "Backup app" (sincronizzazione di SOStituto,
-   azione backupApp). Indirizzo, chiave e nome del dispositivo stanno in una chiave localStorage a parte:
+   Dal 2026-11-26: a ogni modifica (qualche secondo dopo l'ultima) manda S allo script "Backup app"
+   (sincronizzazione di SOStituto, azione backupApp), che tiene su Drive l'ULTIMA versione per dispositivo;
+   ogni notte alle 2:15 lo script ne fa la copia datata del giorno (ultime 14), app aperta o no.
+   Un'app vuota non invia mai; se i dati sono molto più piccoli dell'ultimo backup, lo script chiede conferma. Indirizzo, chiave e nome del dispositivo stanno in una chiave localStorage a parte:
    non finiscono né nei backup né nel repository pubblico. */
 const BK_KEY = 'mestspace-backup';
 const BK_OGNI_ORE = 20;
 const bkCfg = () => { try { return JSON.parse(localStorage.getItem(BK_KEY)) || {}; } catch (e) { return {}; } };
 const bkSave = c => { try { localStorage.setItem(BK_KEY, JSON.stringify(c)); } catch (e) { } };
 const bkDispDefault = () => /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) ? 'telefono' : 'PC';
+// un'app appena aperta su un dispositivo nuovo non ha dati: non va mai spedita come backup
+const bkVuoto = () => !(S.std || []).length && !(S.var || []).length && !(S.perm || []).length && !(S.orario || []).length
+  && !Object.values(S.plans || {}).some(p => Object.keys(p.points || {}).length);
 function bkMostra() {
   const c = bkCfg(), el = $('#bkStato');
   if (!el) return;
@@ -1729,23 +1734,37 @@ function bkMostra() {
   el.classList.toggle('err', !!c.errore);
   el.textContent = !c.url || !c.chiave ? 'Backup automatico non attivo: inserisci indirizzo e chiave.'
     : c.errore ? `Ultimo tentativo non riuscito (${quando(c.tentativo)}): ${c.errore}`
-    : c.ultimo ? `Ultimo backup: ${quando(c.ultimo)}${c.esito === 'invariato' ? ' (dati invariati, nessuna nuova copia)' : ''}.`
+    : c.ultimo ? `Ultimo invio a Drive: ${quando(c.ultimo)}${c.esito === 'invariato' ? ' (dati invariati)' : ''}. Copia del giorno ogni notte alle 2:15.`
     : 'Backup automatico attivo: il primo partirà alla prossima apertura.';
 }
+let bkTimer = null, bkInCorso = false, bkAncora = false;
+function bkProgramma() { clearTimeout(bkTimer); bkTimer = setTimeout(() => { bkTimer = null; bkInvia(false); }, 4000); }
+document.addEventListener('visibilitychange', () => {        // app chiusa o messa in secondo piano: invio subito quello in attesa
+  if (document.visibilityState === 'hidden' && bkTimer) { clearTimeout(bkTimer); bkTimer = null; bkInvia(false); }
+});
 async function bkInvia(manuale) {
+  if (bkInCorso) { bkAncora = true; return; }
   const c = bkCfg();
   if (!c.url || !c.chiave) { if (manuale) await uiAlert('Inserisci prima indirizzo e chiave, poi premi Salva.'); return; }
-  c.tentativo = Date.now(); bkSave(c);
+  if (bkVuoto()) { if (manuale) await uiAlert('Su questo dispositivo non ci sono ancora dati: il backup non parte, per non coprire quelli buoni. Importa prima un backup.'); return; }
+  c.tentativo = Date.now(); bkSave(c); bkInCorso = true;
+  const invia = async forza => (await fetch(c.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ azione: 'backupApp', app: 'MestSpace', chiave: c.chiave, dispositivo: c.dispositivo || bkDispDefault(), dati: S, forza }) })).json();
   try {
-    const r = await fetch(c.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ azione: 'backupApp', app: 'MestSpace', chiave: c.chiave, dispositivo: c.dispositivo || bkDispDefault(), dati: S }) });
-    const j = await r.json();
+    let j = await invia(false);
+    if (!j.ok && j.piuPiccolo) {
+      const kb = n => Math.max(1, Math.round(n / 1024)) + ' KB';
+      if (await uiConfirm(`I dati di questo dispositivo (${kb(j.nuovo)}) sono molto più piccoli dell'ultimo backup su Drive (${kb(j.vecchio)}). Hai cancellato tu molte cose? Se sì, conferma e il backup viene aggiornato. Se no, annulla e importa il backup da Drive.`)) j = await invia(true);
+      else throw new Error('backup non aggiornato: dati molto più piccoli di quelli su Drive');
+    }
     if (!j.ok) throw new Error(j.errore || 'risposta non valida');
     Object.assign(c, { ultimo: Date.now(), esito: /invariato/.test(j.esito || '') ? 'invariato' : 'salvato', errore: '' });
   } catch (err) {
     c.errore = String(err && err.message || err);
   }
+  bkInCorso = false;
   bkSave(c); bkMostra();
+  if (bkAncora) { bkAncora = false; bkProgramma(); }
   if (manuale) await uiAlert(c.errore ? 'Backup non riuscito: ' + c.errore : 'Backup salvato su Drive.');
 }
 (() => {
@@ -1761,6 +1780,7 @@ async function bkInvia(manuale) {
   bkMostra();
   // automatico: una volta al giorno, qualche secondo dopo l'apertura
   if (c.url && c.chiave && (!c.ultimo || Date.now() - c.ultimo > BK_OGNI_ORE * 3600e3)) setTimeout(() => bkInvia(false), 4000);
+  window.bkPronto = true;
 })();
 
 /* ---------- navigazione tab ---------- */

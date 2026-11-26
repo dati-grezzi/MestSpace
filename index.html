@@ -473,7 +473,7 @@
     <p class="hint">I dati restano su questo dispositivo. Esporta un backup periodicamente.</p>
     <div class="bkbox">
     <h3>Backup automatico su Drive</h3>
-    <p class="hint">Una volta al giorno, all'apertura, l'app manda una copia dei dati alla cartella Drive «Backup app/MestSpace». Si tengono le ultime 14 copie per ogni dispositivo. Indirizzo e chiave restano solo su questo dispositivo.</p>
+    <p class="hint">A ogni modifica l'app manda i dati alla cartella Drive «Backup app/MestSpace». Ogni notte alle 2:15, anche ad app chiusa, Drive ne fa la copia del giorno e tiene le ultime 14 per ogni dispositivo. Un'app ancora vuota non invia nulla. Dai a ogni dispositivo un nome diverso. Indirizzo e chiave restano solo su questo dispositivo.</p>
     <div class="bkgrid">
       <label>Indirizzo dello script <input id="bkUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></label>
       <label>Chiave di backup <input id="bkChiave" type="password" autocomplete="off"></label>
@@ -583,6 +583,6 @@
     <div class="aepane"><div class="aeh">Mappa aerea <button id="aeZaOut">−</button><button id="aeZaIn">+</button></div><div class="aesc"><div id="aeAw"><canvas id="aeAc"></canvas></div></div></div>
   </div>
 </div>
-<script src="app.js?v=20261125a"></script>
+<script src="app.js?v=20261126a"></script>
 </body>
 </html>
